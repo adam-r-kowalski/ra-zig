@@ -5,7 +5,7 @@ const list = @import("lang").list;
 test "list insert and lookup" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    const iterations = 10000;
+    const iterations = 10;
     var ints = list.init(usize, &gpa.allocator);
     defer list.deinit(usize, &ints);
     var i: usize = 0;

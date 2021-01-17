@@ -4,14 +4,16 @@ const List = list.List;
 
 pub const Kind = enum(u8) {
     Int,
+    Symbol,
+    Keyword,
+    Parens,
 };
 
 pub const Ast = struct {
     kinds: List(Kind),
     indices: List(usize),
     literals: List([]const u8),
-    starts: List(usize),
-    ends: List(usize),
+    children: List([]const usize),
     top_level: List(usize),
 };
 
@@ -20,8 +22,7 @@ pub fn init(allocator: *std.mem.Allocator) Ast {
         .kinds = list.init(Kind, allocator),
         .indices = list.init(usize, allocator),
         .literals = list.init([]const u8, allocator),
-        .starts = list.init(usize, allocator),
-        .ends = list.init(usize, allocator),
+        .children = list.init([]const usize, allocator),
         .top_level = list.init(usize, allocator),
     };
 }
