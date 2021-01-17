@@ -1,7 +1,4 @@
-const std = @import("std");
-const list = @import("list.zig");
-const parser = @import("parser.zig");
-
-test "" {
-    std.testing.refAllDecls(@This());
+test "all tests" {
+    _ = @import("list.zig");
+    _ = @import("parser.zig");
 }
