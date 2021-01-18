@@ -1,10 +1,12 @@
 const std = @import("std");
 const ast = @import("ast.zig");
+const strings = @import("strings.zig");
 
 pub const Module = struct {
     parent_allocator: *std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
     ast: ast.Ast,
+    strings: strings.Strings,
 };
 
 pub fn init(allocator: *std.mem.Allocator) !Module {
@@ -14,6 +16,7 @@ pub fn init(allocator: *std.mem.Allocator) !Module {
         .parent_allocator = allocator,
         .arena = arena,
         .ast = ast.init(&arena.allocator),
+        .strings = strings.init(&arena.allocator),
     };
 }
 
