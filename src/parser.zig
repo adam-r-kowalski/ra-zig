@@ -53,9 +53,16 @@ fn identifier(kind: ast.Kind, module: *Module, source: *Source) !usize {
     return kind_index;
 }
 
+fn isWhitespace(char: u8) bool {
+    return switch (char) {
+        ' ', '\n' => true,
+        else => false,
+    };
+}
+
 fn trimWhitespace(source: *Source) void {
     var i: usize = 0;
-    while (i < source.input.len and source.input[i] == ' ') : (i += 1) {}
+    while (i < source.input.len and isWhitespace(source.input[i])) : (i += 1) {}
     source.input = source.input[i..];
 }
 
@@ -75,5 +82,6 @@ pub fn parse(module: *Module, input: []const u8) !void {
     while (source.input.len > 0) {
         const index = try expression(module, &source);
         _ = try list.insert(usize, &module.ast.top_level, index);
+        trimWhitespace(&source);
     }
 }

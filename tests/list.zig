@@ -30,3 +30,21 @@ test "list insert slice" {
     std.testing.expectEqual(ints.items[1], 2);
     std.testing.expectEqual(ints.items[2], 1);
 }
+
+test "list add one" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const iterations = 10;
+    var ints = list.init(usize, &gpa.allocator);
+    defer list.deinit(usize, &ints);
+    var i: usize = 0;
+    while (i < iterations) : (i += 1) {
+        const result = try list.addOne(usize, &ints);
+        result.ptr.* = i;
+        std.testing.expectEqual(i, result.index);
+    }
+    i = 0;
+    while (i < iterations) : (i += 1) {
+        std.testing.expectEqual(ints.items[i], i);
+    }
+}
