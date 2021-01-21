@@ -1,40 +1,12 @@
 const Module = @import("module.zig").Module;
-const list = @import("list.zig");
+const List = @import("list.zig").List;
 const ast = @import("ast.zig");
 const strings = @import("strings.zig");
+const EntityId = ast.EntityId;
 
 const Source = struct {
     input: []const u8
 };
-
-fn number(module: *Module, source: *Source) !usize {
-    var i: usize = 0;
-    while (i < source.input.len) : (i += 1) {
-        switch (source.input[i]) {
-            '0'...'9' => continue,
-            else => break,
-        }
-    }
-    const kind_index = try list.insert(ast.Kind, &module.ast.kinds, .Int);
-    const string_index = try strings.intern(&module.strings, source.input[0..i]);
-    _ = try list.insert(usize, &module.ast.indices, string_index);
-    source.input = source.input[i..];
-    return kind_index;
-}
-
-fn listOfType(kind: ast.Kind, delimiter: u8, module: *Module, source: *Source) !usize {
-    source.input = source.input[1..];
-    var children = list.init(usize, &module.arena.allocator);
-    while (source.input.len > 0 and source.input[0] != delimiter) {
-        const index = try expression(module, source);
-        _ = try list.insert(usize, &children, index);
-    }
-    source.input = source.input[1..];
-    const kind_index = try list.insert(ast.Kind, &module.ast.kinds, kind);
-    const children_index = try list.insert([]const usize, &module.ast.children, list.slice(usize, children));
-    _ = try list.insert(usize, &module.ast.indices, children_index);
-    return kind_index;
-}
 
 fn reservedChar(char: u8) bool {
     return switch (char) {
@@ -43,14 +15,41 @@ fn reservedChar(char: u8) bool {
     };
 }
 
-fn identifier(kind: ast.Kind, module: *Module, source: *Source) !usize {
-    var i: usize = 0;
-    while (i < source.input.len and !reservedChar(source.input[i])) : (i += 1) {}
-    const kind_index = try list.insert(ast.Kind, &module.ast.kinds, kind);
-    const string_index = try strings.intern(&module.strings, source.input[0..i]);
-    _ = try list.insert(usize, &module.ast.indices, string_index);
-    source.input = source.input[i..];
-    return kind_index;
+fn insert(module: *Module, source: *Source, kind: ast.Kind, length: usize) !EntityId {
+    const string_index = try strings.intern(&module.strings, source.input[0..length]);
+    const id = try module.ast.entities.insert(.{ .kind = kind, .foreign_id = string_index });
+    source.input = source.input[length..];
+    return id;
+}
+
+fn number(module: *Module, source: *Source) !EntityId {
+    var length: usize = 0;
+    while (length < source.input.len) : (length += 1) {
+        switch (source.input[length]) {
+            '0'...'9' => continue,
+            else => break,
+        }
+    }
+    return try insert(module, source, .Int, length);
+}
+
+fn identifier(kind: ast.Kind, module: *Module, source: *Source) !EntityId {
+    var length: usize = 0;
+    while (length < source.input.len and !reservedChar(source.input[length])) : (length += 1) {}
+    return try insert(module, source, kind, length);
+}
+
+fn listOfType(kind: ast.Kind, delimiter: u8, module: *Module, source: *Source) !EntityId {
+    source.input = source.input[1..];
+    var children = List(EntityId).init(&module.arena.allocator);
+    while (source.input.len > 0 and source.input[0] != delimiter) {
+        const id = try expression(module, source);
+        _ = try children.insert(id);
+    }
+    source.input = source.input[1..];
+    const children_index = try module.ast.children.insert(children.slice());
+    const id = try module.ast.entities.insert(.{ .kind = kind, .foreign_id = children_index });
+    return id;
 }
 
 fn isWhitespace(char: u8) bool {
@@ -66,7 +65,7 @@ fn trimWhitespace(source: *Source) void {
     source.input = source.input[i..];
 }
 
-fn expression(module: *Module, source: *Source) error{OutOfMemory}!usize {
+fn expression(module: *Module, source: *Source) error{OutOfMemory}!EntityId {
     trimWhitespace(source);
     return switch (source.input[0]) {
         '0'...'9' => try number(module, source),
@@ -80,8 +79,8 @@ fn expression(module: *Module, source: *Source) error{OutOfMemory}!usize {
 pub fn parse(module: *Module, input: []const u8) !void {
     var source = Source{ .input = input };
     while (source.input.len > 0) {
-        const index = try expression(module, &source);
-        _ = try list.insert(usize, &module.ast.top_level, index);
+        const id = try expression(module, &source);
+        _ = try module.ast.top_level.insert(id);
         trimWhitespace(&source);
     }
 }

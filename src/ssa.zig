@@ -3,27 +3,29 @@ const list = @import("list.zig");
 const List = list.List;
 
 pub const Kind = enum(u8) {
-    OverloadSet,
+    Function,
 };
 
-pub const Function = struct {
+pub const Overload = struct {
     parameter_names: []const usize,
 };
 
+pub const Function = List(Overload);
+
 pub const Ssa = struct {
-    contents: std.AutoHashMap(usize, usize),
+    name_to_index: std.AutoHashMap(usize, usize),
     kinds: List(Kind),
     names: List(usize),
     indices: List(usize),
-    overload_sets: List(List(Function)),
+    functions: List(Function),
 };
 
 pub fn init(allocator: *std.mem.Allocator) Ssa {
     return .{
-        .contents = std.AutoHashMap(usize, usize).init(allocator),
-        .kinds = list.init(Kind, allocator),
-        .names = list.init(usize, allocator),
-        .indices = list.init(usize, allocator),
-        .overload_sets = list.init(List(Function), allocator),
+        .name_to_index = std.AutoHashMap(usize, usize).init(allocator),
+        .kinds = List(Kind).init(allocator),
+        .names = List(usize).init(allocator),
+        .indices = List(usize).init(allocator),
+        .functions = List(Function).init(allocator),
     };
 }

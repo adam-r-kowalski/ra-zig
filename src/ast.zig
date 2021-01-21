@@ -1,6 +1,10 @@
 const std = @import("std");
 const list = @import("list.zig");
 const List = list.List;
+const table = @import("table.zig");
+const Table = table.Table;
+
+pub const EntityId = table.Id("ast entities");
 
 pub const Kind = enum(u8) {
     Int,
@@ -10,18 +14,25 @@ pub const Kind = enum(u8) {
     Brackets,
 };
 
+const Entities =
+    Table(.{
+    .name = "ast entities",
+    .columns = struct {
+        kind: Kind,
+        foreign_id: usize,
+    },
+});
+
 pub const Ast = struct {
-    kinds: List(Kind),
-    indices: List(usize),
-    children: List([]const usize),
-    top_level: List(usize),
+    entities: Entities,
+    children: List([]const EntityId),
+    top_level: List(EntityId),
 };
 
 pub fn init(allocator: *std.mem.Allocator) Ast {
     return .{
-        .kinds = list.init(Kind, allocator),
-        .indices = list.init(usize, allocator),
-        .children = list.init([]const usize, allocator),
-        .top_level = list.init(usize, allocator),
+        .entities = Entities.init(allocator),
+        .children = List([]const EntityId).init(allocator),
+        .top_level = List(EntityId).init(allocator),
     };
 }

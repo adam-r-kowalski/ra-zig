@@ -1,0 +1,15 @@
+(fn mae :args (y (tensor ?t) y-hat (tensor ?t)) :ret (tensor ?t)
+  :body (mean (abs (- y y-hat))))
+
+(fn test-gradient-descent :args () :ret void
+  :body
+  (const x (range f64 10))
+  (const y (+ (* x 3) 5))  
+  (const rng (random-device :seed 0))
+  (const allocator (arena :parent-allocator page-allocator))
+  (defer (destroy allocator))
+  (const learning-rate 1e-3)
+  (var model (try (normal &allocator &rng :mean 0 :standard-deviation 1 :shape [2])))
+  (const gradients (try (gradient mae &allocator model)))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                	
+  (set! model (- model (* gradients learning-rate))))                                                                                                                                                                                                                                          	
+ 

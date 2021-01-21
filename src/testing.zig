@@ -1,55 +1,55 @@
 const std = @import("std");
 const Module = @import("module.zig").Module;
+const ast = @import("ast.zig");
 const ssa = @import("ssa.zig");
-const list = @import("list.zig");
-const List = list.List;
+const List = @import("list.zig").List;
 
-fn expressionString(output: *List(u8), module: Module, index: usize, depth: usize) error{OutOfMemory}!void {
+fn expressionString(output: *List(u8), module: Module, id: ast.EntityId, depth: usize) error{OutOfMemory}!void {
     var i: usize = 0;
-    while (i < depth) : (i += 1) _ = try list.insert(u8, output, ' ');
-    const data_index = module.ast.indices.items[index];
-    switch (module.ast.kinds.items[index]) {
+    while (i < depth) : (i += 1) _ = try output.insert(' ');
+    const entity = module.ast.entities.lookup(id);
+    switch (entity.kind) {
         .Int => {
-            try list.insertSlice(u8, output, "(int ");
-            try list.insertSlice(u8, output, module.strings.data.items[data_index]);
-            _ = try list.insert(u8, output, ')');
+            try output.insertSlice("(int ");
+            try output.insertSlice(module.strings.data.items[entity.foreign_id]);
+            _ = try output.insert(')');
         },
         .Symbol => {
-            try list.insertSlice(u8, output, "(symbol ");
-            try list.insertSlice(u8, output, module.strings.data.items[data_index]);
-            _ = try list.insert(u8, output, ')');
+            try output.insertSlice("(symbol ");
+            try output.insertSlice(module.strings.data.items[entity.foreign_id]);
+            _ = try output.insert(')');
         },
         .Keyword => {
-            try list.insertSlice(u8, output, "(keyword ");
-            try list.insertSlice(u8, output, module.strings.data.items[data_index]);
-            _ = try list.insert(u8, output, ')');
+            try output.insertSlice("(keyword ");
+            try output.insertSlice(module.strings.data.items[entity.foreign_id]);
+            _ = try output.insert(')');
         },
         .Parens => {
-            try list.insertSlice(u8, output, "(parens");
-            for (module.ast.children.items[data_index]) |child| {
-                _ = try list.insert(u8, output, '\n');
+            try output.insertSlice("(parens");
+            for (module.ast.children.items[entity.foreign_id]) |child| {
+                _ = try output.insert('\n');
                 try expressionString(output, module, child, depth + 2);
             }
-            _ = try list.insert(u8, output, ')');
+            _ = try output.insert(')');
         },
         .Brackets => {
-            try list.insertSlice(u8, output, "(brackets");
-            for (module.ast.children.items[data_index]) |child| {
-                _ = try list.insert(u8, output, '\n');
+            try output.insertSlice("(brackets");
+            for (module.ast.children.items[entity.foreign_id]) |child| {
+                _ = try output.insert('\n');
                 try expressionString(output, module, child, depth + 2);
             }
-            _ = try list.insert(u8, output, ')');
+            _ = try output.insert(')');
         },
     }
 }
 
 pub fn astString(allocator: *std.mem.Allocator, module: Module) !List(u8) {
-    var output = list.init(u8, allocator);
-    errdefer list.deinit(u8, &output);
+    var output = List(u8).init(allocator);
+    errdefer output.deinit();
     const length = module.ast.top_level.length;
-    for (list.slice(usize, module.ast.top_level)) |index, i| {
+    for (module.ast.top_level.slice()) |index, i| {
         try expressionString(&output, module, index, 0);
-        if (i < length - 1) _ = try list.insert(u8, &output, '\n');
+        if (i < length - 1) _ = try output.insert('\n');
     }
     return output;
 }
@@ -59,10 +59,10 @@ pub fn ssaString(allocator: *std.mem.Allocator, module: Module) !List(u8) {
     errdefer list.deinit(u8, &output);
     for (list.slice(ssa.Kind, module.ssa.kinds)) |kind, i| {
         switch (kind) {
-            .OverloadSet => {
+            .Function => {
                 const name = module.strings.data.items[module.ssa.names.items[i]];
-                const overloads = module.ssa.overload_sets.items[module.ssa.indices.items[i]];
-                for (list.slice(ssa.Function, overloads)) |overload| {
+                const function = module.ssa.functions.items[module.ssa.indices.items[i]];
+                for (list.slice(ssa.Overload, function)) |overload| {
                     try list.insertSlice(u8, &output, "(fn ");
                     try list.insertSlice(u8, &output, name);
                 }

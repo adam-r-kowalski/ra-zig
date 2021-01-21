@@ -1,1 +1,1 @@
-(fn main :args [] :ret i64 :body 0)
+(fn main :args () :ret i64 :body 0)

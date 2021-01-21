@@ -1,6 +1,5 @@
 const std = @import("std");
 const lang = @import("lang");
-const list = lang.list;
 
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -10,8 +9,8 @@ test "int" {
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(int 123)
         \\(int 475)
         \\(int 923)
@@ -26,8 +25,8 @@ test "symbol" {
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(symbol foo)
         \\(symbol bar)
         \\(symbol baz)
@@ -42,8 +41,8 @@ test "keyword" {
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(keyword :foo)
         \\(keyword :bar)
         \\(keyword :baz)
@@ -58,8 +57,8 @@ test "parens" {
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(parens
         \\  (symbol +)
         \\  (int 3)
@@ -79,8 +78,8 @@ test "brackets" {
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(brackets
         \\  (brackets
         \\    (int 1)
@@ -94,18 +93,18 @@ test "brackets" {
 test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    const source = "(fn main :args [] :ret i64 :body 0)";
+    const source = "(fn main :args () :ret i64 :body 0)";
     var module = try lang.module.init(&gpa.allocator);
     defer lang.module.deinit(&module);
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
-    defer lang.list.deinit(u8, &ast_string);
-    std.testing.expectEqualStrings(list.slice(u8, ast_string),
+    defer ast_string.deinit();
+    std.testing.expectEqualStrings(ast_string.slice(),
         \\(parens
         \\  (symbol fn)
         \\  (symbol main)
         \\  (keyword :args)
-        \\  (brackets)
+        \\  (parens)
         \\  (keyword :ret)
         \\  (symbol i64)
         \\  (keyword :body)
