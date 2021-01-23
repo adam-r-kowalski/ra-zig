@@ -2,7 +2,6 @@ const Module = @import("module.zig").Module;
 const List = @import("list.zig").List;
 const ast = @import("ast.zig");
 const strings = @import("strings.zig");
-const EntityId = ast.EntityId;
 
 const Source = struct {
     input: []const u8
@@ -15,14 +14,15 @@ fn reservedChar(char: u8) bool {
     };
 }
 
-fn insert(module: *Module, source: *Source, kind: ast.Kind, length: usize) !EntityId {
+fn insert(module: *Module, source: *Source, kind: ast.Kind, length: usize) !usize {
     const string_index = try strings.intern(&module.strings, source.input[0..length]);
-    const id = try module.ast.entities.insert(.{ .kind = kind, .foreign_id = string_index });
+    const kind_index = try module.ast.kinds.insert(kind);
+    _ = try module.ast.indices.insert(string_index);
     source.input = source.input[length..];
-    return id;
+    return kind_index;
 }
 
-fn number(module: *Module, source: *Source) !EntityId {
+fn number(module: *Module, source: *Source) !usize {
     var length: usize = 0;
     while (length < source.input.len) : (length += 1) {
         switch (source.input[length]) {
@@ -33,23 +33,24 @@ fn number(module: *Module, source: *Source) !EntityId {
     return try insert(module, source, .Int, length);
 }
 
-fn identifier(kind: ast.Kind, module: *Module, source: *Source) !EntityId {
+fn identifier(kind: ast.Kind, module: *Module, source: *Source) !usize {
     var length: usize = 0;
     while (length < source.input.len and !reservedChar(source.input[length])) : (length += 1) {}
     return try insert(module, source, kind, length);
 }
 
-fn listOfType(kind: ast.Kind, delimiter: u8, module: *Module, source: *Source) !EntityId {
+fn listOfType(kind: ast.Kind, delimiter: u8, module: *Module, source: *Source) !usize {
     source.input = source.input[1..];
-    var children = List(EntityId).init(&module.arena.allocator);
+    var children = List(usize).init(&module.arena.allocator);
     while (source.input.len > 0 and source.input[0] != delimiter) {
         const id = try expression(module, source);
         _ = try children.insert(id);
     }
     source.input = source.input[1..];
     const children_index = try module.ast.children.insert(children.slice());
-    const id = try module.ast.entities.insert(.{ .kind = kind, .foreign_id = children_index });
-    return id;
+    const kind_index = try module.ast.kinds.insert(kind);
+    _ = try module.ast.indices.insert(children_index);
+    return kind_index;
 }
 
 fn isWhitespace(char: u8) bool {
@@ -65,7 +66,7 @@ fn trimWhitespace(source: *Source) void {
     source.input = source.input[i..];
 }
 
-fn expression(module: *Module, source: *Source) error{OutOfMemory}!EntityId {
+fn expression(module: *Module, source: *Source) error{OutOfMemory}!usize {
     trimWhitespace(source);
     return switch (source.input[0]) {
         '0'...'9' => try number(module, source),

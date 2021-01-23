@@ -1,12 +1,11 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const Module = @import("module.zig").Module;
+const List = @import("list.zig").List;
 const ast = @import("ast.zig");
 const ssa = @import("ssa.zig");
 const Overload = ssa.Overload;
 const Function = ssa.Function;
-const list = @import("list.zig");
-const List = list.List;
 const Children = []const usize;
 
 fn astIndex(module: *const Module, kind: ast.Kind, entity: usize) usize {
@@ -34,6 +33,7 @@ fn lowerParameters(module: *Module, overload: *Overload, children: Children) !vo
         parameter_names[i] = astIndex(module, .Symbol, parameters[0]);
         parameters = parameters[2..];
     }
+    overload.parameter_names = parameter_names;
 }
 
 fn lowerOverload(module: *Module, children: Children) !void {
@@ -47,20 +47,20 @@ fn lowerOverload(module: *Module, children: Children) !void {
             const function_index = module.ssa.indices.items[index];
             break :blk &module.ssa.functions.items[function_index];
         } else {
-            _ = try list.insert(ssa.Kind, &module.ssa.kinds, .Function);
-            get_or_put_result.entry.value = try list.insert(usize, &module.ssa.names, name);
-            const result = try list.addOne(Function, &module.ssa.functions);
-            result.ptr.* = list.init(Overload, &module.arena.allocator);
-            _ = try list.insert(usize, &module.ssa.indices, result.index);
+            _ = try module.ssa.kinds.insert(.Function);
+            get_or_put_result.entry.value = try module.ssa.names.insert(name);
+            const result = try module.ssa.functions.addOne();
+            result.ptr.* = List(Overload).init(&module.arena.allocator);
+            _ = try module.ssa.indices.insert(result.index);
             break :blk result.ptr;
         }
     };
-    const result = try list.addOne(Overload, function);
+    const result = try function.addOne();
     try lowerParameters(module, result.ptr, children[1..]);
 }
 
 pub fn lower(module: *Module) !void {
-    for (list.slice(usize, module.ast.top_level)) |index| {
+    for (module.ast.top_level.slice()) |index| {
         const children = astChildren(module, .Parens, index);
         assert(children.len > 0);
         assert(std.mem.eql(u8, astString(module, .Symbol, children[0]), "fn"));

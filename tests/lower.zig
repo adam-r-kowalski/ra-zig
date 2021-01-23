@@ -14,24 +14,24 @@ test "distance" {
     try lang.parse(&module, source);
     try lang.lower(&module);
     var ssa_string = try lang.testing.ssaString(allocator, module);
-    defer lang.list.deinit(u8, &ssa_string);
-    std.testing.expectEqualStrings(lang.list.slice(u8, ssa_string),
+    defer ssa_string.deinit();
+    std.testing.expectEqualStrings(ssa_string.slice(),
         \\(fn distance
         \\  :parameter-names (x y)
         \\  :parameter-type-blocks (%b0 %b1)
         \\  :return-type-blocks %b2
         \\  :body-block %b3
         \\  (block %b0
-        \\    (ret f64))
+        \\    (return f64))
         \\  (block %b1
-        \\    (ret f64))
+        \\    (return f64))
         \\  (block %b2
-        \\    (ret f64))
+        \\    (return f64))
         \\  (block %b3
-        \\    (let %t0 (pow x 2))
-        \\    (let %t1 (pow y 2))
-        \\    (let %t2 (+ %t0 %t1))
-        \\    (let %t3 (sqrt %t2))
-        \\    (ret %t3)))
+        \\    (const %t0 (pow x 2))
+        \\    (const %t1 (pow y 2))
+        \\    (const %t2 (+ %t0 %t1))
+        \\    (const %t3 (sqrt %t2))
+        \\    (return %t3)))
     );
 }

@@ -6,8 +6,13 @@ pub const Kind = enum(u8) {
     Function,
 };
 
+const Scope = struct {
+    names: []usize,
+};
+
 pub const Overload = struct {
     parameter_names: []const usize,
+    scopes: []const Scope,
 };
 
 pub const Function = List(Overload);

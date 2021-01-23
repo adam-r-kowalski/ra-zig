@@ -5,6 +5,4 @@ pub const lower = @import("lower.zig").lower;
 pub const module = @import("module.zig");
 pub const codegen = @import("codegen.zig").codegen;
 pub const testing = @import("testing.zig");
-const table = @import("table.zig");
-pub const Table = table.Table;
-pub const Id = table.Id;
+pub const Database = @import("database.zig").Database;
