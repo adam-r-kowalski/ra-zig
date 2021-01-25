@@ -1,23 +1,26 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const Module = @import("module.zig").Module;
+const module_ = @import("module.zig");
+const Ast = module_.Ast;
+const Ssa = module_.Ssa;
+const Overload = module_.Overload;
+const Function = module_.Function;
+const BasicBlock = module_.BasicBlock;
+const Scope = module_.Scope;
+const Module = module_.Module;
 const List = @import("list.zig").List;
-const ast = @import("ast.zig");
-const ssa = @import("ssa.zig");
-const Overload = ssa.Overload;
-const Function = ssa.Function;
 const Children = []const usize;
 
-fn astIndex(module: *const Module, kind: ast.Kind, entity: usize) usize {
+fn astIndex(module: *const Module, kind: Ast.Kind, entity: usize) usize {
     assert(module.ast.kinds.items[entity] == kind);
     return module.ast.indices.items[entity];
 }
 
-fn astChildren(module: *const Module, kind: ast.Kind, entity: usize) Children {
+fn astChildren(module: *const Module, kind: Ast.Kind, entity: usize) Children {
     return module.ast.children.items[astIndex(module, kind, entity)];
 }
 
-fn astString(module: *const Module, kind: ast.Kind, entity: usize) []const u8 {
+fn astString(module: *const Module, kind: Ast.Kind, entity: usize) []const u8 {
     return module.strings.data.items[astIndex(module, kind, entity)];
 }
 
@@ -27,13 +30,18 @@ fn lowerParameters(module: *Module, overload: *Overload, children: Children) !vo
     assert(children.len > 2);
     var parameters = astChildren(module, .Parens, children[1]);
     assert(parameters.len % 2 == 0);
-    const parameter_names = try module.arena.allocator.alloc(usize, parameters.len / 2);
+    const parameter_count = parameters.len / 2;
+    const parameter_names = try module.arena.allocator.alloc(usize, parameter_count);
+    const parameter_type_blocks = try module.arena.allocator.alloc(usize, parameter_count);
     var i: usize = 0;
     while (parameters.len > 0) : (i += 1) {
         parameter_names[i] = astIndex(module, .Symbol, parameters[0]);
+        const result = try overload.basic_blocks.addOne();
+        parameter_type_blocks[i] = result.index;
         parameters = parameters[2..];
     }
     overload.parameter_names = parameter_names;
+    overload.parameter_type_blocks = parameter_type_blocks;
 }
 
 fn lowerOverload(module: *Module, children: Children) !void {
@@ -55,8 +63,15 @@ fn lowerOverload(module: *Module, children: Children) !void {
             break :blk result.ptr;
         }
     };
-    const result = try function.addOne();
-    try lowerParameters(module, result.ptr, children[1..]);
+    const overload = (try function.addOne()).ptr;
+    overload.scopes = List(Scope).init(&module.arena.allocator);
+    overload.basic_blocks = List(BasicBlock).init(&module.arena.allocator);
+    var remaining_children = children[1..];
+    while (remaining_children.len > 0) {
+        assert(module.ast.kinds.items[remaining_children[0]] == .Keyword);
+        remaining_children = remaining_children[2..];
+    }
+    // try lowerParameters(module, overload, children[1..]);
 }
 
 pub fn lower(module: *Module) !void {

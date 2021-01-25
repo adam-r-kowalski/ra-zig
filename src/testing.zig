@@ -63,7 +63,13 @@ pub fn ssaString(allocator: *std.mem.Allocator, module: Module) !List(u8) {
                         if (j < overload.parameter_names.len - 1)
                             _ = try output.insert(' ');
                     }
-                    try output.insertSlice(")\n  :parameter-type-blocks ()\n");
+                    try output.insertSlice(")\n  :parameter-type-blocks (");
+                    for (overload.parameter_type_blocks) |block, j| {
+                        try output.insertFormatted("%b{}", .{block});
+                        if (j < overload.parameter_type_blocks.len - 1)
+                            _ = try output.insert(' ');
+                    }
+                    try output.insertSlice(")\n  :return-type-blocks (");
                 }
             },
         }

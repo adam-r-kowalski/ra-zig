@@ -1,12 +1,13 @@
 const std = @import("std");
 const lang = @import("lang");
+const Module = lang.Module;
 
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = "123 475 923";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();
@@ -21,8 +22,8 @@ test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = "foo bar baz";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();
@@ -37,8 +38,8 @@ test "keyword" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = ":foo :bar :baz";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();
@@ -53,8 +54,8 @@ test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = "(+ 3 7 (* 9 5))";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();
@@ -74,8 +75,8 @@ test "brackets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = "[[1 2] [3 4]]";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();
@@ -94,8 +95,8 @@ test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source = "(fn main :args () :ret i64 :body 0)";
-    var module = try lang.module.init(&gpa.allocator);
-    defer lang.module.deinit(&module);
+    var module = try Module.init(&gpa.allocator);
+    defer module.deinit();
     try lang.parse(&module, source);
     var ast_string = try lang.testing.astString(&gpa.allocator, module);
     defer ast_string.deinit();

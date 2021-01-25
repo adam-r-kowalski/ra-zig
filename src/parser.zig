@@ -1,7 +1,8 @@
-const Module = @import("module.zig").Module;
+const module_ = @import("module.zig");
+const Ast = module_.Ast;
+const Module = module_.Module;
 const List = @import("list.zig").List;
-const ast = @import("ast.zig");
-const strings = @import("strings.zig");
+const Strings = @import("strings.zig").Strings;
 
 const Source = struct {
     input: []const u8
@@ -14,8 +15,8 @@ fn reservedChar(char: u8) bool {
     };
 }
 
-fn insert(module: *Module, source: *Source, kind: ast.Kind, length: usize) !usize {
-    const string_index = try strings.intern(&module.strings, source.input[0..length]);
+fn insert(module: *Module, source: *Source, kind: Ast.Kind, length: usize) !usize {
+    const string_index = try module.strings.intern(source.input[0..length]);
     const kind_index = try module.ast.kinds.insert(kind);
     _ = try module.ast.indices.insert(string_index);
     source.input = source.input[length..];
@@ -33,13 +34,13 @@ fn number(module: *Module, source: *Source) !usize {
     return try insert(module, source, .Int, length);
 }
 
-fn identifier(kind: ast.Kind, module: *Module, source: *Source) !usize {
+fn identifier(kind: Ast.Kind, module: *Module, source: *Source) !usize {
     var length: usize = 0;
     while (length < source.input.len and !reservedChar(source.input[length])) : (length += 1) {}
     return try insert(module, source, kind, length);
 }
 
-fn listOfType(kind: ast.Kind, delimiter: u8, module: *Module, source: *Source) !usize {
+fn listOfType(kind: Ast.Kind, delimiter: u8, module: *Module, source: *Source) !usize {
     source.input = source.input[1..];
     var children = List(usize).init(&module.arena.allocator);
     while (source.input.len > 0 and source.input[0] != delimiter) {

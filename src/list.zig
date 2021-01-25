@@ -47,6 +47,12 @@ pub fn List(comptime T: type) type {
             for (values) |value| _ = try self.insert(value);
         }
 
+        pub fn insertFormatted(self: *Self, comptime format: []const u8, args: anytype) !void {
+            const buffer = try std.fmt.allocPrint(self.allocator, format, args);
+            defer self.allocator.free(buffer);
+            return try self.insertSlice(buffer);
+        }
+
         pub fn addOne(self: *Self) !Result {
             const length = self.length;
             try self.ensureCapacity();

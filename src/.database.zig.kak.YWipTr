@@ -77,7 +77,8 @@ fn WriteGroup(comptime types: []const type) type {
 
 fn ReadIterator(comptime T: type) type {
     const Entry = struct {
-        data: *const T,
+        dathrome
+        : *const T,
         entity: Entity,
     };
 
