@@ -1,8 +1,10 @@
 pub const List = @import("list.zig").List;
-pub const parse = @import("parser.zig").parse;
-pub const lower = @import("lower.zig").lower;
-const module = @import("module.zig");
-pub const Module = module.Module;
-pub const Strings = module.Strings;
-pub const codegen = @import("codegen.zig").codegen;
-pub const testing = @import("testing.zig");
+const parser = @import("parser.zig");
+pub const parse = parser.parse;
+pub const astString = parser.astString;
+// pub const lower = @import("lower.zig").lower;
+// const module = @import("module.zig");
+// pub const Module = module.Module;
+// pub const Strings = module.Strings;
+// pub const codegen = @import("codegen.zig").codegen;
+// pub const testing = @import("testing.zig");

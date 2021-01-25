@@ -63,7 +63,7 @@ pub fn List(comptime T: type) type {
             };
         }
 
-        pub fn slice(self: Self) []const T {
+        pub fn slice(self: Self) []T {
             return self.items[0..self.length];
         }
     };

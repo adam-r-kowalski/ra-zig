@@ -5,54 +5,9 @@ const List = @import("list.zig").List;
 
 const String = []const u8;
 
-fn Map(comptime Key: type, comptime Value: type) type {
+pub fn Map(comptime Key: type, comptime Value: type) type {
     return if (Key == []const u8) std.StringHashMap(Value) else std.AutoHashMap(Key, Value);
 }
-
-pub const Strings = struct {
-    data: List(String),
-    mapping: Map(String, usize),
-
-    pub fn init(allocator: *Allocator) Strings {
-        return .{
-            .data = List(String).init(allocator),
-            .mapping = Map(String, usize).init(allocator),
-        };
-    }
-
-    pub fn intern(self: *Strings, string: []const u8) !usize {
-        const result = try self.mapping.getOrPut(string);
-        if (result.found_existing)
-            return result.entry.value;
-        const index = try self.data.insert(string);
-        result.entry.value = index;
-        return index;
-    }
-};
-
-pub const Ast = struct {
-    pub const Kind = enum(u8) {
-        Int,
-        Symbol,
-        Keyword,
-        Parens,
-        Brackets,
-    };
-
-    kinds: List(Kind),
-    indices: List(usize),
-    children: List([]const usize),
-    top_level: List(usize),
-
-    pub fn init(allocator: *Allocator) Ast {
-        return .{
-            .kinds = List(Kind).init(allocator),
-            .indices = List(usize).init(allocator),
-            .children = List([]const usize).init(allocator),
-            .top_level = List(usize).init(allocator),
-        };
-    }
-};
 
 const Name = usize;
 
