@@ -10,7 +10,7 @@ test "int" {
     defer expect(!gpa.deinit());
     const source = "123 475 923";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -25,7 +25,7 @@ test "symbol" {
     defer expect(!gpa.deinit());
     const source = "foo bar baz";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -40,7 +40,7 @@ test "keyword" {
     defer expect(!gpa.deinit());
     const source = ":foo :bar :baz";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -55,7 +55,7 @@ test "parens" {
     defer expect(!gpa.deinit());
     const source = "(+ 3 7 (* 9 5))";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -75,7 +75,7 @@ test "brackets" {
     defer expect(!gpa.deinit());
     const source = "[[1 2] [3 4]]";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -94,7 +94,7 @@ test "entry point" {
     defer expect(!gpa.deinit());
     const source = "(fn main :args () :ret i64 :body 0)";
     var ast = try parse(&gpa.allocator, source);
-    defer ast.deinit();
+    defer ast.arena.deinit();
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),

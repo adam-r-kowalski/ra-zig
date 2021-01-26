@@ -9,10 +9,10 @@ test "distance" {
         \\(fn distance :args ((x f64) (y f64)) :ret f64
         \\  :body (sqrt (+ (pow x 2) (pow y 2))))
     ;
-    var module = try lang.Module.init(allocator);
-    defer module.deinit();
-    try lang.parse(&module, source);
-    try lang.lower(&module);
+    var ast = try lang.parse(allocator, source);
+    defer ast.arena.deinit();
+    var ssa = try lang.lower(allocator, ast);
+    defer ssa.arena.deinit();
     // var ssa_string = try lang.testing.ssaString(allocator, module);
     // defer ssa_string.deinit();
     // std.testing.expectEqualStrings(ssa_string.slice(),
