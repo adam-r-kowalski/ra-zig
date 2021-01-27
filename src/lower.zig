@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Arena = std.heap.ArenaAllocator;
 const parser = @import("parser.zig");
+const Strings = parser.Strings;
 const Ast = parser.Ast;
 const AstKind = parser.Kind;
 const List = @import("list.zig").List;
@@ -61,21 +62,15 @@ fn astString(ast: Ast, kind: AstKind, entity: usize) []const u8 {
     return ast.strings.data.items[astIndex(ast, kind, entity)];
 }
 
-fn lowerParameters(ast: Ast, ssa: *Ssa, overload: *Overload, children: Children) !void {
-    assert(children.len > 1);
-    assert(std.mem.eql(u8, astString(ast, .Keyword, children[0]), ":args"));
-    assert(children.len > 2);
-    var parameters = astChildren(ast, .Parens, children[1]);
-    assert(parameters.len % 2 == 0);
-    const parameter_count = parameters.len / 2;
-    const parameter_names = try ssa.arena.allocator.alloc(usize, parameter_count);
-    const parameter_type_blocks = try ssa.arena.allocator.alloc(usize, parameter_count);
-    var i: usize = 0;
-    while (parameters.len > 0) : (i += 1) {
-        parameter_names[i] = astIndex(module, .Symbol, parameters[0]);
+fn lowerParameters(ast: Ast, ssa: *Ssa, overload: *Overload, entity: usize) !void {
+    var parameters = astChildren(ast, .Parens, entity);
+    const parameter_names = try ssa.arena.allocator.alloc(usize, parameters.len);
+    const parameter_type_blocks = try ssa.arena.allocator.alloc(usize, parameters.len);
+    for (parameters) |parameter_index, i| {
+        const parameter = astChildren(ast, .Parens, parameter_index);
+        parameter_names[i] = astIndex(ast, .Symbol, parameter[0]);
         const result = try overload.basic_blocks.addOne();
         parameter_type_blocks[i] = result.index;
-        parameters = parameters[2..];
     }
     overload.parameter_names = parameter_names;
     overload.parameter_type_blocks = parameter_type_blocks;
@@ -104,11 +99,13 @@ fn lowerOverload(ssa: *Ssa, ast: Ast, children: Children) !void {
     overload.scopes = List(Scope).init(&ssa.arena.allocator);
     overload.basic_blocks = List(BasicBlock).init(&ssa.arena.allocator);
     var remaining_children = children[1..];
+    var keyword_to_index = Map(usize, usize).init(&ssa.arena.allocator);
     while (remaining_children.len > 0) {
-        assert(ast.kinds.items[remaining_children[0]] == .Keyword);
+        const keyword = astIndex(ast, .Keyword, remaining_children[0]);
+        try keyword_to_index.putNoClobber(keyword, remaining_children[1]);
         remaining_children = remaining_children[2..];
     }
-    // try lowerParameters(module, overload, children[1..]);
+    try lowerParameters(ast, ssa, overload, keyword_to_index.get(parser.ARGS).?);
 }
 
 pub fn lower(allocator: *Allocator, ast: Ast) !Ssa {
@@ -122,8 +119,39 @@ pub fn lower(allocator: *Allocator, ast: Ast) !Ssa {
     for (ast.top_level.slice()) |index| {
         const children = astChildren(ast, .Parens, index);
         assert(children.len > 0);
-        assert(std.mem.eql(u8, astString(ast, .Symbol, children[0]), "fn"));
+        assert(astIndex(ast, .Symbol, children[0]) == parser.FN);
         try lowerOverload(&ssa, ast, children[1..]);
     }
     return ssa;
+}
+
+pub fn ssaString(allocator: *std.mem.Allocator, strings: Strings, ssa: Ssa) !List(u8) {
+    var output = List(u8).init(allocator);
+    errdefer output.deinit();
+    for (ssa.kinds.slice()) |kind, i| {
+        switch (kind) {
+            .Function => {
+                const name = strings.data.items[ssa.names.items[i]];
+                const function = ssa.functions.items[ssa.indices.items[i]];
+                for (function.slice()) |overload| {
+                    try output.insertSlice("(fn ");
+                    try output.insertSlice(name);
+                    try output.insertSlice("\n  :parameter-names (");
+                    for (overload.parameter_names) |parameter_name, j| {
+                        try output.insertSlice(strings.data.items[parameter_name]);
+                        if (j < overload.parameter_names.len - 1)
+                            _ = try output.insert(' ');
+                    }
+                    try output.insertSlice(")\n  :parameter-type-blocks (");
+                    for (overload.parameter_type_blocks) |block, j| {
+                        try output.insertFormatted("%b{}", .{block});
+                        if (j < overload.parameter_type_blocks.len - 1)
+                            _ = try output.insert(' ');
+                    }
+                    try output.insertSlice(")\n  :return-type-blocks (");
+                }
+            },
+        }
+    }
+    return output;
 }

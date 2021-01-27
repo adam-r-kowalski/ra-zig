@@ -1,8 +1,12 @@
 const std = @import("std");
+const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Arena = std.heap.ArenaAllocator;
 const List = @import("list.zig").List;
 const Map = @import("map.zig").Map;
+
+pub const FN = 0;
+pub const ARGS = 1;
 
 const Source = struct {
     input: []const u8
@@ -16,7 +20,7 @@ pub const Kind = enum(u8) {
     Brackets,
 };
 
-const Strings = struct {
+pub const Strings = struct {
     data: List([]const u8),
     mapping: Map([]const u8, usize),
 };
@@ -109,6 +113,13 @@ fn expression(ast: *Ast, source: *Source) error{OutOfMemory}!usize {
     };
 }
 
+fn primeStrings(strings: *Strings) !void {
+    const fn_symbol = try intern(strings, "fn");
+    const args_keyword = try intern(strings, ":args");
+    assert(fn_symbol == FN);
+    assert(args_keyword == ARGS);
+}
+
 pub fn parse(allocator: *Allocator, input: []const u8) !Ast {
     var ast: Ast = undefined;
     ast.arena = Arena.init(allocator);
@@ -118,6 +129,7 @@ pub fn parse(allocator: *Allocator, input: []const u8) !Ast {
     ast.top_level = List(usize).init(&ast.arena.allocator);
     ast.strings.data = List([]const u8).init(&ast.arena.allocator);
     ast.strings.mapping = Map([]const u8, usize).init(&ast.arena.allocator);
+    try primeStrings(&ast.strings);
     var source = Source{ .input = input };
     while (source.input.len > 0) {
         const id = try expression(&ast, &source);
