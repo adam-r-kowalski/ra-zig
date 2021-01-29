@@ -21,6 +21,7 @@ test "distance" {
         \\  :parameter-type-blocks (%b0 %b1)
         \\  :return-type-blocks %b2
         \\  :body-block %b3
+        \\  :blocks
         \\  (block %b0
         \\    (return f64))
         \\  (block %b1

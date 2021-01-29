@@ -7,6 +7,8 @@ const Map = @import("map.zig").Map;
 
 pub const FN = 0;
 pub const ARGS = 1;
+pub const RET = 2;
+pub const BODY = 3;
 
 const Source = struct {
     input: []const u8
@@ -116,8 +118,12 @@ fn expression(ast: *Ast, source: *Source) error{OutOfMemory}!usize {
 fn primeStrings(strings: *Strings) !void {
     const fn_symbol = try intern(strings, "fn");
     const args_keyword = try intern(strings, ":args");
+    const ret_keyword = try intern(strings, ":ret");
+    const body_keyword = try intern(strings, ":body");
     assert(fn_symbol == FN);
     assert(args_keyword == ARGS);
+    assert(ret_keyword == RET);
+    assert(body_keyword == BODY);
 }
 
 pub fn parse(allocator: *Allocator, input: []const u8) !Ast {
