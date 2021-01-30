@@ -20,13 +20,14 @@ const InternedString = usize;
 pub const Scope = Map(InternedString, usize);
 
 const ExpressionKind = enum(u8) {
-    Call,
     Return,
 };
 
 pub const BasicBlock = struct {
     active_scopes: []const usize,
-    kind: []const ExpressionKind,
+    kinds: List(ExpressionKind),
+    indices: List(usize),
+    returns: List(usize),
 };
 
 pub const Entities = struct {
@@ -73,13 +74,47 @@ fn astString(ast: Ast, kind: AstKind, ast_entity: usize) []const u8 {
     return ast.strings.data.items[astIndex(ast, kind, ast_entity)];
 }
 
-fn lowerExpression(overload: *Overload, ast: Ast, block: usize, ast_entity: usize) !usize {
+fn lowerExpression(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
     switch (ast.kinds.items[ast_entity]) {
         .Symbol => {
+            const name = ast.indices.items[ast_entity];
+            const active_scopes = overload.basic_blocks.items[active_block.*].active_scopes;
+            var i: usize = active_scopes.len;
+            while (i != 0) : (i -= 1) {
+                if (overload.scopes.items[i - 1].get(name)) |entity|
+                    return entity;
+            }
+            const entity = overload.entities.next_id;
+            overload.entities.next_id += 1;
+            try overload.entities.names.putNoClobber(entity, name);
+            try overload.scopes.items[EXTERNAL_SCOPE].putNoClobber(name, entity);
             return 0;
         },
-        else => std.debug.panic("entity kind not yet supported!", .{}),
+        else => std.debug.panic("entity kind {} not yet supported!", .{ast.kinds.items[ast_entity]}),
     }
+}
+
+fn lowerBasicBlock(overload: *Overload, ast: Ast, block: usize, children: Children) !void {
+    var active_block = block;
+    const scope_entity = try lowerExpression(overload, ast, &active_block, children[0]);
+    const basic_block = &overload.basic_blocks.items[active_block];
+    _ = try basic_block.kinds.insert(.Return);
+    const return_index = try basic_block.returns.insert(scope_entity);
+    _ = try basic_block.indices.insert(return_index);
+}
+
+fn newBasicBlockAndScope(allocator: *Allocator, overload: *Overload, currently_active_scopes: []const usize) !usize {
+    const new_scope = try overload.scopes.insert(Scope.init(allocator));
+    const result = try overload.basic_blocks.addOne();
+    const basic_block = result.ptr;
+    const active_scopes = try allocator.alloc(usize, currently_active_scopes.len + 1);
+    for (currently_active_scopes) |scope, i| active_scopes[i] = scope;
+    active_scopes[currently_active_scopes.len] = new_scope;
+    basic_block.active_scopes = active_scopes;
+    basic_block.kinds = List(ExpressionKind).init(allocator);
+    basic_block.indices = List(usize).init(allocator);
+    basic_block.returns = List(usize).init(allocator);
+    return result.index;
 }
 
 fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, ast_entity: usize) !void {
@@ -95,22 +130,24 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, ast_ent
         overload.entities.next_id += 1;
         try overload.entities.names.putNoClobber(id, parameter_name);
         try overload.scopes.items[FUNCTION_SCOPE].putNoClobber(parameter_name, id);
-        const block = (try overload.basic_blocks.addOne()).index;
+        const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
         parameter_type_blocks[i] = block;
-        const parameter_type = try lowerExpression(overload, ast, block, parameter[1]);
+        try lowerBasicBlock(overload, ast, block, parameter[1..2]);
     }
     overload.parameter_names = parameter_names;
     overload.parameter_type_blocks = parameter_type_blocks;
 }
 
-fn lowerReturnType(overload: *Overload, ast: Ast, ast_entity: usize) !void {
-    const result = try overload.basic_blocks.addOne();
-    overload.return_type_block = result.index;
+fn lowerReturnType(allocator: *Allocator, overload: *Overload, ast: Ast, ast_entity: usize) !void {
+    const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
+    overload.return_type_block = block;
+    try lowerBasicBlock(overload, ast, block, &.{ast_entity});
 }
 
-fn lowerBody(overload: *Overload, ast: Ast, ast_entity: usize) !void {
-    const result = try overload.basic_blocks.addOne();
-    overload.body_block = result.index;
+fn lowerBody(allocator: *Allocator, overload: *Overload, ast: Ast, ast_entity: usize) !void {
+    const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
+    overload.body_block = block;
+    // try lowerBasicBlock(overload, ast, block, parameter[1..2]);
 }
 
 fn lowerOverload(allocator: *Allocator, function: *Function, ast: Ast, children: Children) !void {
@@ -132,8 +169,8 @@ fn lowerOverload(allocator: *Allocator, function: *Function, ast: Ast, children:
         remaining_children = remaining_children[2..];
     }
     try lowerParameters(allocator, overload, ast, keyword_to_index.get(parser.ARGS).?);
-    try lowerReturnType(overload, ast, keyword_to_index.get(parser.RET).?);
-    try lowerBody(overload, ast, keyword_to_index.get(parser.BODY).?);
+    try lowerReturnType(allocator, overload, ast, keyword_to_index.get(parser.RET).?);
+    try lowerBody(allocator, overload, ast, keyword_to_index.get(parser.BODY).?);
 }
 
 fn createOrOverloadFunction(ssa: *Ssa, ast: Ast, ast_entity: usize) !*Function {
@@ -202,15 +239,14 @@ pub fn ssaString(allocator: *std.mem.Allocator, strings: Strings, ssa: Ssa) !Lis
                     for (overload.scopes.slice()) |scope, j| {
                         try output.insertSlice("\n  (scope ");
                         switch (j) {
-                            EXTERNAL_SCOPE => try output.insertSlice("%external-scope"),
-                            FUNCTION_SCOPE => try output.insertSlice("%function-scope"),
-                            else => try output.insertFormatted("%s{}", .{j}),
+                            EXTERNAL_SCOPE => try output.insertSlice("%external"),
+                            FUNCTION_SCOPE => try output.insertSlice("%function"),
+                            else => try output.insertFormatted("%s{}", .{j - 2}),
                         }
                         var iterator = scope.iterator();
                         while (iterator.next()) |entry| {
                             try output.insertSlice("\n    (entity ");
                             if (overload.entities.names.get(entry.value)) |string_index| {
-                                try output.insertSlice(":name ");
                                 try output.insertSlice(strings.data.items[string_index]);
                             }
                             _ = try output.insert(')');
@@ -220,7 +256,28 @@ pub fn ssaString(allocator: *std.mem.Allocator, strings: Strings, ssa: Ssa) !Lis
                     try output.insertSlice("\n  :blocks");
                     for (overload.basic_blocks.slice()) |basic_block, j| {
                         try output.insertSlice("\n  (block ");
-                        try output.insertFormatted("%b{})", .{j});
+                        try output.insertFormatted("%b{} :scopes (", .{j});
+                        for (basic_block.active_scopes) |scope, k| {
+                            switch (scope) {
+                                EXTERNAL_SCOPE => try output.insertSlice("%external"),
+                                FUNCTION_SCOPE => try output.insertSlice("%function"),
+                                else => try output.insertFormatted("%s{}", .{scope - 2}),
+                            }
+                            if (k < basic_block.active_scopes.len - 1)
+                                _ = try output.insert(' ');
+                        }
+                        try output.insertSlice(")\n    :expressions");
+                        for (basic_block.kinds.slice()) |expression_kind, k| {
+                            switch (expression_kind) {
+                                .Return => {
+                                    try output.insertSlice("\n    (return ");
+                                    const entity = basic_block.returns.items[basic_block.indices.items[k]];
+                                    const string_index = overload.entities.names.get(entity).?;
+                                    try output.insertSlice(strings.data.items[string_index]);
+                                },
+                            }
+                        }
+                        _ = try output.insert(')');
                     }
                     _ = try output.insert(')');
                 }
