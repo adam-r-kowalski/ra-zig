@@ -1,15 +1,13 @@
-(fn mae :args ((y (tensor ?t)) (y-hat (tensor ?t))) :ret (tensor ?t)
-  :body (mean (abs (- y y-hat))))
+(fn distance :args ((x f64) (y f64)) :ret f64
+  :body (√ (+ (^ x 2) (^ y 2))))
 
-(fn test-gradient-descent :args () :ret void
+
+(fn max :args ((x i64) (y i64)) :ret i64
+  :body (if (> x y) x y))
+
+
+(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
   :body
-  (const x (range f64 10))
-  (const y (+ (* x 3) 5))  
-  (const rng (random-device :seed 0))
-  (const allocator (arena :parent-allocator page-allocator))
-  (defer (destroy allocator))
-  (const learning-rate 1e-3)
-  (var model (try (normal &allocator &rng :mean 0 :standard-deviation 1 :shape [2])))
-  (const gradients (try (gradient mae &allocator model)))                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          	
-  (set! model (- model (* gradients learning-rate))))                                                                                                                                                                                                                                                                    	
- 
+  (const x2 (^ x 2))
+  (const y2 (^ y 2))
+  (+ x2 y2))

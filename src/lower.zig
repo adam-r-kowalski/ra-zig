@@ -14,6 +14,7 @@ const EXTERNAL_SCOPE = 0;
 const FUNCTION_SCOPE = 1;
 
 const IF = std.math.maxInt(usize);
+const CONST = IF - 1;
 
 const String = []const u8;
 
@@ -103,25 +104,26 @@ fn astChildren(ast: Ast, kind: AstKind, ast_entity: usize) Children {
     return ast.children.items[astIndex(ast, kind, ast_entity)].slice();
 }
 
-fn astString(ast: Ast, kind: AstKind, ast_entity: usize) []const u8 {
-    return ast.strings.data.items[astIndex(ast, kind, ast_entity)];
-}
-
 fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
     const name = ast.indices.items[ast_entity];
-    if (name == parser.IF) return IF;
-    const active_scopes = overload.basic_blocks.items[active_block.*].active_scopes;
-    var i: usize = active_scopes.len;
-    while (i != 0) : (i -= 1) {
-        if (overload.scopes.items[active_scopes[i - 1]].name_to_entity.get(name)) |entity|
+    switch (name) {
+        parser.IF => return IF,
+        parser.CONST => return CONST,
+        else => {
+            const active_scopes = overload.basic_blocks.items[active_block.*].active_scopes;
+            var i: usize = active_scopes.len;
+            while (i != 0) : (i -= 1) {
+                if (overload.scopes.items[active_scopes[i - 1]].name_to_entity.get(name)) |entity|
+                    return entity;
+            }
+            const entity = overload.entities.next_id;
+            overload.entities.next_id += 1;
+            try overload.entities.names.putNoClobber(entity, name);
+            try overload.scopes.items[EXTERNAL_SCOPE].name_to_entity.putNoClobber(name, entity);
+            _ = try overload.scopes.items[EXTERNAL_SCOPE].entities.insert(entity);
             return entity;
+        },
     }
-    const entity = overload.entities.next_id;
-    overload.entities.next_id += 1;
-    try overload.entities.names.putNoClobber(entity, name);
-    try overload.scopes.items[EXTERNAL_SCOPE].name_to_entity.putNoClobber(name, entity);
-    _ = try overload.scopes.items[EXTERNAL_SCOPE].entities.insert(entity);
-    return entity;
 }
 
 fn lowerInt(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
@@ -177,12 +179,21 @@ fn lowerIf(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *
     return entity;
 }
 
-fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
-    const children = ast.children.items[ast.indices.items[ast_entity]].slice();
-    const function = try lowerExpression(allocator, overload, ast, active_block, children[0]);
-    if (function == IF) return lowerIf(allocator, overload, ast, active_block, children[1..]);
-    const arguments = try allocator.alloc(usize, children.len - 1);
-    for (children[1..]) |child, i|
+fn lowerConst(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !usize {
+    const name = astIndex(ast, .Symbol, children[0]);
+    const entity = try lowerExpression(allocator, overload, ast, active_block, children[1]);
+    assert(children.len == 2);
+    const result = try overload.entities.names.getOrPut(entity);
+    assert(!result.found_existing);
+    result.entry.value = name;
+    const active_scopes = overload.basic_blocks.items[active_block.*].active_scopes;
+    try overload.scopes.items[active_scopes[active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
+    return entity;
+}
+
+fn lowerCall(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, function: usize, children: Children) !usize {
+    const arguments = try allocator.alloc(usize, children.len);
+    for (children) |child, i|
         arguments[i] = try lowerExpression(allocator, overload, ast, active_block, child);
     const basic_block = &overload.basic_blocks.items[active_block.*];
     _ = try basic_block.kinds.insert(.Call);
@@ -199,6 +210,16 @@ fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_bloc
     return entity;
 }
 
+fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
+    const children = ast.children.items[ast.indices.items[ast_entity]].slice();
+    const function = try lowerExpression(allocator, overload, ast, active_block, children[0]);
+    return switch (function) {
+        IF => lowerIf(allocator, overload, ast, active_block, children[1..]),
+        CONST => lowerConst(allocator, overload, ast, active_block, children[1..]),
+        else => lowerCall(allocator, overload, ast, active_block, function, children[1..]),
+    };
+}
+
 fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) error{OutOfMemory}!usize {
     return switch (ast.kinds.items[ast_entity]) {
         .Symbol => try lowerSymbol(overload, ast, active_block, ast_entity),
@@ -206,15 +227,6 @@ fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_
         .Parens => try lowerParens(allocator, overload, ast, active_block, ast_entity),
         else => std.debug.panic("entity kind {} not yet supported!", .{ast.kinds.items[ast_entity]}),
     };
-}
-
-fn lowerBasicBlock(allocator: *Allocator, overload: *Overload, ast: Ast, block: usize, children: Children) !void {
-    var active_block = block;
-    const scope_entity = try lowerExpression(allocator, overload, ast, &active_block, children[0]);
-    const basic_block = &overload.basic_blocks.items[active_block];
-    _ = try basic_block.kinds.insert(.Return);
-    const return_index = try basic_block.returns.insert(scope_entity);
-    _ = try basic_block.indices.insert(return_index);
 }
 
 fn newBasicBlockAndScope(allocator: *Allocator, overload: *Overload, currently_active_scopes: []const usize) !usize {
@@ -254,9 +266,13 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, childre
         try overload.entities.names.putNoClobber(entity, parameter_name);
         try overload.scopes.items[FUNCTION_SCOPE].name_to_entity.putNoClobber(parameter_name, entity);
         _ = try overload.scopes.items[FUNCTION_SCOPE].entities.insert(entity);
-        const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
+        var block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
         parameter_type_blocks[i] = block;
-        try lowerBasicBlock(allocator, overload, ast, block, parameter[1..2]);
+        const type_entity = try lowerExpression(allocator, overload, ast, &block, parameter[1]);
+        const basic_block = &overload.basic_blocks.items[block];
+        _ = try basic_block.kinds.insert(.Return);
+        const return_index = try basic_block.returns.insert(type_entity);
+        _ = try basic_block.indices.insert(return_index);
     }
     overload.parameter_names = parameter_names;
     overload.parameter_type_blocks = parameter_type_blocks;
@@ -264,15 +280,26 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, childre
 
 fn lowerReturnType(allocator: *Allocator, overload: *Overload, ast: Ast, children: Children) !void {
     assert(children.len == 1);
-    const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
+    var block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
     overload.return_type_block = block;
-    try lowerBasicBlock(allocator, overload, ast, block, children);
+    const entity = try lowerExpression(allocator, overload, ast, &block, children[0]);
+    const basic_block = &overload.basic_blocks.items[block];
+    _ = try basic_block.kinds.insert(.Return);
+    const return_index = try basic_block.returns.insert(entity);
+    _ = try basic_block.indices.insert(return_index);
 }
 
 fn lowerBody(allocator: *Allocator, overload: *Overload, ast: Ast, children: Children) !void {
-    const block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
+    assert(children.len != 0);
+    var block = try newBasicBlockAndScope(allocator, overload, &.{ EXTERNAL_SCOPE, FUNCTION_SCOPE });
     overload.body_block = block;
-    try lowerBasicBlock(allocator, overload, ast, block, children);
+    var entity: usize = undefined;
+    for (children) |child|
+        entity = try lowerExpression(allocator, overload, ast, &block, child);
+    const basic_block = &overload.basic_blocks.items[block];
+    _ = try basic_block.kinds.insert(.Return);
+    const return_index = try basic_block.returns.insert(entity);
+    _ = try basic_block.indices.insert(return_index);
 }
 
 fn childrenTillNextKeyword(ast: Ast, children: Children) usize {
@@ -444,7 +471,7 @@ fn writeReturn(writer: Writer, basic_block: BasicBlock, block_entity: usize) !vo
 fn writeCall(writer: Writer, basic_block: BasicBlock, block_entity: usize) !void {
     const output = writer.output;
     const call = basic_block.calls.items[basic_block.indices.items[block_entity]];
-    try output.insertSlice("\n    (let ");
+    try output.insertSlice("\n    (const ");
     try writeEntity(writer, call.entity);
     try output.insertSlice(" (");
     try writeEntity(writer, call.function);
@@ -466,7 +493,7 @@ fn writeBranch(writer: Writer, basic_block: BasicBlock, block_entity: usize) !vo
 fn writePhi(writer: Writer, basic_block: BasicBlock, block_entity: usize) !void {
     const output = writer.output;
     const phi = basic_block.phis.items[basic_block.indices.items[block_entity]];
-    try output.insertSlice("\n    (let ");
+    try output.insertSlice("\n    (const ");
     try writeEntity(writer, phi.entity);
     try output.insertSlice(" (phi ");
     try output.insertFormatted("(%b{} ", .{phi.then_block});
