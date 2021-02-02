@@ -7,7 +7,7 @@ test "ssa form" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn distance :args ((x f64) (y f64)) :ret f64
-        \\  :body (sqrt (+ (pow x 2) (pow y 2))))
+        \\  :body (√ (+ (^ x 2) (^ y 2))))
     ;
     var ast = try lang.parse(allocator, source);
     defer ast.arena.deinit();
@@ -24,9 +24,9 @@ test "ssa form" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name f64)
-        \\    (entity :name sqrt)
+        \\    (entity :name √)
         \\    (entity :name +)
-        \\    (entity :name pow))
+        \\    (entity :name ^))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -52,10 +52,10 @@ test "ssa form" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const %t1 (pow x %t0))
-        \\    (const %t3 (pow y %t2))
+        \\    (const %t1 (^ x %t0))
+        \\    (const %t3 (^ y %t2))
         \\    (const %t4 (+ %t1 %t3))
-        \\    (const %t5 (sqrt %t4))
+        \\    (const %t5 (√ %t4))
         \\    (return %t5)))
     );
 }
@@ -130,8 +130,8 @@ test "constants" {
     const source =
         \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
         \\  :body
-        \\  (const x2 (pow x 2))
-        \\  (const y2 (pow y 2))
+        \\  (const x2 (^ x 2))
+        \\  (const y2 (^ y 2))
         \\  (+ x2 y2))
     ;
     var ast = try lang.parse(allocator, source);
@@ -149,7 +149,7 @@ test "constants" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name i64)
-        \\    (entity :name pow)
+        \\    (entity :name ^)
         \\    (entity :name +))
         \\  (scope %function
         \\    (entity :name x)
@@ -175,8 +175,8 @@ test "constants" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const x2 (pow x %t0))
-        \\    (const y2 (pow y %t1))
+        \\    (const x2 (^ x %t0))
+        \\    (const y2 (^ y %t1))
         \\    (const %t2 (+ x2 y2))
         \\    (return %t2)))
     );
