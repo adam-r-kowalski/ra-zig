@@ -3,7 +3,7 @@ const assert = std.debug.assert;
 const Arena = std.heap.ArenaAllocator;
 const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
-const InternedStrings = data.ast.InternedStrings;
+const InternedStrings = data.interned_strings.InternedStrings;
 const DeclarationKind = data.ir.DeclarationKind;
 const IrBlock = data.ir.Block;
 const Ir = data.ir.Ir;
@@ -97,9 +97,12 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
 }
 
 pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: InternedStrings) !X86 {
-    var x86: X86 = undefined;
-    x86.arena = Arena.init(allocator);
-    x86.blocks = List(X86Block).init(&x86.arena.allocator);
+    const arena = try allocator.create(Arena);
+    arena.* = Arena.init(allocator);
+    var x86 = X86{
+        .arena = arena,
+        .blocks = List(X86Block).init(&arena.allocator),
+    };
     try entryPoint(&x86);
     try main(&x86, ir, interned_strings);
     return x86;

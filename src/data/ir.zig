@@ -90,4 +90,9 @@ pub const Ir = struct {
     indices: List(usize),
     functions: List(Function),
     arena: *Arena,
+
+    pub fn deinit(self: *@This()) void {
+        self.arena.deinit();
+        self.arena.child_allocator.destroy(self.arena);
+    }
 };

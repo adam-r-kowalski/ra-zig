@@ -5,15 +5,17 @@ const lang = @import("lang");
 test "ir form" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
     const source =
         \\(fn distance :args ((x f64) (y f64)) :ret f64
         \\  :body (√ (+ (^ x 2) (^ y 2))))
     ;
-    var ast = try lang.parse(&arena, source);
-    var ir = try lang.lower(&arena, ast);
-    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn distance
@@ -63,15 +65,17 @@ test "ir form" {
 test "conditionals" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
     const source =
         \\(fn max :args ((x i64) (y i64)) :ret i64
         \\  :body (if (> x y) x y))
     ;
-    var ast = try lang.parse(&arena, source);
-    var ir = try lang.lower(&arena, ast);
-    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn max
@@ -125,8 +129,6 @@ test "conditionals" {
 test "constants" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
     const source =
         \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
         \\  :body
@@ -134,9 +136,13 @@ test "constants" {
         \\  (const y2 (^ y 2))
         \\  (+ x2 y2))
     ;
-    var ast = try lang.parse(&arena, source);
-    var ir = try lang.lower(&arena, ast);
-    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn sum-of-squares
@@ -183,8 +189,6 @@ test "constants" {
 test "overloading" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
     const source =
         \\(fn area :args ((c circle)) :ret f64
         \\  :body (* π (^ (radius c) 2)))
@@ -192,9 +196,13 @@ test "overloading" {
         \\(fn area :args ((r rectangle)) :ret f64
         \\  :body (* (width r) (height r)))
     ;
-    var ast = try lang.parse(&arena, source);
-    var ir = try lang.lower(&arena, ast);
-    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn area

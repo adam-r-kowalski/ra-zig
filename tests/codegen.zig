@@ -16,10 +16,12 @@ test "add" {
         \\  (const y 15)
         \\  (+ x y))
     ;
-    var arena = Arena.init(allocator);
-    defer arena.deinit();
-    const ast = try parse(&arena, source);
-    const ir = try lower(&arena, ast);
-    var x86 = try lang.codegen(allocator, ir, ast.interned_strings);
-    defer x86.arena.deinit();
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, interned_strings);
+    defer x86.deinit();
 }

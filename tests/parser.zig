@@ -9,11 +9,12 @@ var astString = lang.astString;
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
     const source = "123 475 923";
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(int 123)
@@ -26,10 +27,11 @@ test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "foo bar baz";
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(symbol foo)
@@ -42,10 +44,11 @@ test "keyword" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = ":foo :bar :baz";
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(keyword :foo)
@@ -58,10 +61,11 @@ test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(+ 3 7 (* 9 5))";
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(parens
@@ -79,10 +83,11 @@ test "brackets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "[[1 2] [3 4]]";
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(brackets
@@ -99,10 +104,11 @@ test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(fn main :args () :ret i64 :body 0)";
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var ast = try parse(&arena, source);
-    var ast_string = try astString(&gpa.allocator, ast);
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(parens

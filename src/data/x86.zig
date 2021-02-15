@@ -38,5 +38,10 @@ pub const Block = struct {
 
 pub const X86 = struct {
     blocks: List(Block),
-    arena: Arena,
+    arena: *Arena,
+
+    pub fn deinit(self: *@This()) void {
+        self.arena.deinit();
+        self.arena.child_allocator.destroy(self.arena);
+    }
 };

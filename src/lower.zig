@@ -3,10 +3,8 @@ const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Arena = std.heap.ArenaAllocator;
 const data = @import("data.zig");
-const InternedStrings = data.ast.InternedStrings;
 const Ast = data.ast.Ast;
 const AstKind = data.ast.Kind;
-const Strings = data.ast.Strings;
 const List = data.List;
 const Map = data.Map;
 const Children = []const usize;
@@ -24,6 +22,8 @@ const Call = data.ir.Call;
 const Branch = data.ir.Branch;
 const Phi = data.ir.Phi;
 const SpecialForms = data.ir.SpecialForms;
+const Strings = data.interned_strings.Strings;
+const InternedStrings = data.interned_strings.InternedStrings;
 
 fn astIndex(ast: Ast, kind: AstKind, ast_entity: usize) usize {
     assert(ast.kinds.items[ast_entity] == kind);
@@ -300,14 +300,16 @@ fn createOrOverloadFunction(ir: *Ir, ast: Ast, ast_entity: usize) !*Function {
     return result.ptr;
 }
 
-pub fn lower(arena: *Arena, ast: Ast) !Ir {
+pub fn lower(allocator: *Allocator, ast: Ast) !Ir {
+    const arena = try allocator.create(Arena);
+    arena.* = Arena.init(allocator);
     var ir = Ir{
+        .arena = arena,
         .name_to_index = Map(InternedString, usize).init(&arena.allocator),
         .kinds = List(DeclarationKind).init(&arena.allocator),
         .names = List(InternedString).init(&arena.allocator),
         .indices = List(usize).init(&arena.allocator),
         .functions = List(Function).init(&arena.allocator),
-        .arena = arena,
     };
     for (ast.top_level.slice()) |index| {
         const children = astChildren(ast, .Parens, index);
@@ -478,7 +480,8 @@ fn writeBlocks(writer: Writer) !void {
 }
 
 fn functionString(allocator: *Allocator, output: *List(u8), interned_strings: InternedStrings, ir: Ir, ir_entity: usize) !void {
-    const name = interned_strings.data.items[ir.names.items[ir_entity]];
+    const string_index = ir.names.items[ir_entity];
+    const name = interned_strings.data.items[string_index];
     const overloads = ir.functions.items[ir.indices.items[ir_entity]].slice();
     for (overloads) |overload, i| {
         var anonymous_entity_to_name = Map(usize, usize).init(allocator);
@@ -503,6 +506,7 @@ fn functionString(allocator: *Allocator, output: *List(u8), interned_strings: In
         if (i < overloads.len - 1) try output.insertSlice("\n\n");
     }
 }
+
 pub fn irString(allocator: *std.mem.Allocator, interned_strings: InternedStrings, ir: Ir) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
