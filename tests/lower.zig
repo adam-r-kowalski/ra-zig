@@ -1,21 +1,21 @@
 const std = @import("std");
+const Arena = std.heap.ArenaAllocator;
 const lang = @import("lang");
 
-test "ssa form" {
+test "ir form" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
     const source =
         \\(fn distance :args ((x f64) (y f64)) :ret f64
         \\  :body (√ (+ (^ x 2) (^ y 2))))
     ;
-    var ast = try lang.parse(allocator, source);
-    defer ast.arena.deinit();
-    var ssa = try lang.lower(allocator, ast);
-    defer ssa.arena.deinit();
-    var ssa_string = try lang.ssaString(allocator, ast.strings, ssa);
-    defer ssa_string.deinit();
-    std.testing.expectEqualStrings(ssa_string.slice(),
+    var ast = try lang.parse(&arena, source);
+    var ir = try lang.lower(&arena, ast);
+    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn distance
         \\  :parameter-names (x y)
         \\  :parameter-type-blocks (%b0 %b1)
@@ -63,18 +63,17 @@ test "ssa form" {
 test "conditionals" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
     const source =
         \\(fn max :args ((x i64) (y i64)) :ret i64
         \\  :body (if (> x y) x y))
     ;
-    var ast = try lang.parse(allocator, source);
-    defer ast.arena.deinit();
-    var ssa = try lang.lower(allocator, ast);
-    defer ssa.arena.deinit();
-    var ssa_string = try lang.ssaString(allocator, ast.strings, ssa);
-    defer ssa_string.deinit();
-    std.testing.expectEqualStrings(ssa_string.slice(),
+    var ast = try lang.parse(&arena, source);
+    var ir = try lang.lower(&arena, ast);
+    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn max
         \\  :parameter-names (x y)
         \\  :parameter-type-blocks (%b0 %b1)
@@ -126,7 +125,8 @@ test "conditionals" {
 test "constants" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
     const source =
         \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
         \\  :body
@@ -134,13 +134,11 @@ test "constants" {
         \\  (const y2 (^ y 2))
         \\  (+ x2 y2))
     ;
-    var ast = try lang.parse(allocator, source);
-    defer ast.arena.deinit();
-    var ssa = try lang.lower(allocator, ast);
-    defer ssa.arena.deinit();
-    var ssa_string = try lang.ssaString(allocator, ast.strings, ssa);
-    defer ssa_string.deinit();
-    std.testing.expectEqualStrings(ssa_string.slice(),
+    var ast = try lang.parse(&arena, source);
+    var ir = try lang.lower(&arena, ast);
+    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn sum-of-squares
         \\  :parameter-names (x y)
         \\  :parameter-type-blocks (%b0 %b1)
@@ -178,6 +176,95 @@ test "constants" {
         \\    (const x2 (^ x %t0))
         \\    (const y2 (^ y %t1))
         \\    (const %t2 (+ x2 y2))
+        \\    (return %t2)))
+    );
+}
+
+test "overloading" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    const source =
+        \\(fn area :args ((c circle)) :ret f64
+        \\  :body (* π (^ (radius c) 2)))
+        \\
+        \\(fn area :args ((r rectangle)) :ret f64
+        \\  :body (* (width r) (height r)))
+    ;
+    var ast = try lang.parse(&arena, source);
+    var ir = try lang.lower(&arena, ast);
+    var ir_string = try lang.irString(&gpa.allocator, ast.interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn area
+        \\  :parameter-names (c)
+        \\  :parameter-type-blocks (%b0)
+        \\  :return-type-blocks %b1
+        \\  :body-block %b2
+        \\  :scopes
+        \\  (scope %external
+        \\    (entity :name circle)
+        \\    (entity :name f64)
+        \\    (entity :name *)
+        \\    (entity :name π)
+        \\    (entity :name ^)
+        \\    (entity :name radius))
+        \\  (scope %function
+        \\    (entity :name c))
+        \\  (scope %s0)
+        \\  (scope %s1)
+        \\  (scope %s2
+        \\    (entity :name %t0)
+        \\    (entity :name %t1 :value 2)
+        \\    (entity :name %t2)
+        \\    (entity :name %t3))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return circle))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return f64))
+        \\  (block %b2 :scopes (%external %function %s2)
+        \\    :expressions
+        \\    (const %t0 (radius c))
+        \\    (const %t2 (^ %t0 %t1))
+        \\    (const %t3 (* π %t2))
+        \\    (return %t3)))
+        \\
+        \\(fn area
+        \\  :parameter-names (r)
+        \\  :parameter-type-blocks (%b0)
+        \\  :return-type-blocks %b1
+        \\  :body-block %b2
+        \\  :scopes
+        \\  (scope %external
+        \\    (entity :name rectangle)
+        \\    (entity :name f64)
+        \\    (entity :name *)
+        \\    (entity :name width)
+        \\    (entity :name height))
+        \\  (scope %function
+        \\    (entity :name r))
+        \\  (scope %s0)
+        \\  (scope %s1)
+        \\  (scope %s2
+        \\    (entity :name %t0)
+        \\    (entity :name %t1)
+        \\    (entity :name %t2))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return rectangle))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return f64))
+        \\  (block %b2 :scopes (%external %function %s2)
+        \\    :expressions
+        \\    (const %t0 (width r))
+        \\    (const %t1 (height r))
+        \\    (const %t2 (* %t0 %t1))
         \\    (return %t2)))
     );
 }

@@ -2,7 +2,7 @@ const std = @import("std");
 const expectEqual = std.testing.expectEqual;
 const expect = std.testing.expect;
 
-const List = @import("lang").List;
+const List = @import("lang").data.List;
 
 test "list insert and lookup" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

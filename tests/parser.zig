@@ -1,4 +1,5 @@
 const std = @import("std");
+const Arena = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
 const expectEqualStrings = std.testing.expectEqualStrings;
 const lang = @import("lang");
@@ -8,9 +9,10 @@ var astString = lang.astString;
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
     const source = "123 475 923";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -24,8 +26,9 @@ test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "foo bar baz";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -39,8 +42,9 @@ test "keyword" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = ":foo :bar :baz";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -54,8 +58,9 @@ test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(+ 3 7 (* 9 5))";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -74,8 +79,9 @@ test "brackets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "[[1 2] [3 4]]";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
@@ -93,8 +99,9 @@ test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(fn main :args () :ret i64 :body 0)";
-    var ast = try parse(&gpa.allocator, source);
-    defer ast.arena.deinit();
+    var arena = Arena.init(&gpa.allocator);
+    defer arena.deinit();
+    var ast = try parse(&arena, source);
     var ast_string = try astString(&gpa.allocator, ast);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),

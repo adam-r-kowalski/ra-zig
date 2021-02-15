@@ -1,48 +1,21 @@
 const std = @import("std");
-const assert = std.debug.assert;
 const Allocator = std.mem.Allocator;
 const Arena = std.heap.ArenaAllocator;
-const List = @import("list.zig").List;
-const Map = @import("map.zig").Map;
+const assert = std.debug.assert;
+const data = @import("data.zig");
+const Ast = data.ast.Ast;
+const Kind = data.ast.Kind;
+const Strings = data.ast.Strings;
+const InternedStrings = data.ast.InternedStrings;
+const Source = data.ast.Source;
+const List = data.List;
+const Map = data.Map;
 
-pub const FN = 0;
-pub const ARGS = 1;
-pub const RET = 2;
-pub const BODY = 3;
-pub const IF = 4;
-pub const CONST = 5;
-
-const Source = struct {
-    input: []const u8
-};
-
-pub const Kind = enum(u8) {
-    Int,
-    Symbol,
-    Keyword,
-    Parens,
-    Brackets,
-};
-
-pub const Strings = struct {
-    data: List([]const u8),
-    mapping: Map([]const u8, usize),
-};
-
-pub const Ast = struct {
-    kinds: List(Kind),
-    indices: List(usize),
-    children: List(List(usize)),
-    top_level: List(usize),
-    strings: Strings,
-    arena: Arena,
-};
-
-fn intern(strings: *Strings, string: []const u8) !usize {
-    const result = try strings.mapping.getOrPut(string);
+fn intern(interned_strings: *InternedStrings, string: []const u8) !usize {
+    const result = try interned_strings.mapping.getOrPut(string);
     if (result.found_existing)
         return result.entry.value;
-    const index = try strings.data.insert(string);
+    const index = try interned_strings.data.insert(string);
     result.entry.value = index;
     return index;
 }
@@ -55,7 +28,7 @@ fn reservedChar(char: u8) bool {
 }
 
 fn insert(kind: Kind, ast: *Ast, source: *Source, length: usize) !usize {
-    const string_index = try intern(&ast.strings, source.input[0..length]);
+    const string_index = try intern(&ast.interned_strings, source.input[0..length]);
     const kind_index = try ast.kinds.insert(kind);
     _ = try ast.indices.insert(string_index);
     source.input = source.input[length..];
@@ -117,31 +90,34 @@ fn expression(ast: *Ast, source: *Source) error{OutOfMemory}!usize {
     };
 }
 
-fn primeStrings(strings: *Strings) !void {
-    const fn_symbol = try intern(strings, "fn");
-    const args_keyword = try intern(strings, ":args");
-    const ret_keyword = try intern(strings, ":ret");
-    const body_keyword = try intern(strings, ":body");
-    const if_symbol = try intern(strings, "if");
-    const const_symbol = try intern(strings, "const");
-    assert(fn_symbol == FN);
-    assert(args_keyword == ARGS);
-    assert(ret_keyword == RET);
-    assert(body_keyword == BODY);
-    assert(if_symbol == IF);
-    assert(const_symbol == CONST);
+fn primeStrings(interned_strings: *InternedStrings) !void {
+    const fn_symbol = try intern(interned_strings, "fn");
+    const args_keyword = try intern(interned_strings, ":args");
+    const ret_keyword = try intern(interned_strings, ":ret");
+    const body_keyword = try intern(interned_strings, ":body");
+    const if_symbol = try intern(interned_strings, "if");
+    const const_symbol = try intern(interned_strings, "const");
+    assert(fn_symbol == @enumToInt(Strings.Fn));
+    assert(args_keyword == @enumToInt(Strings.Args));
+    assert(ret_keyword == @enumToInt(Strings.Ret));
+    assert(body_keyword == @enumToInt(Strings.Body));
+    assert(if_symbol == @enumToInt(Strings.If));
+    assert(const_symbol == @enumToInt(Strings.Const));
 }
 
-pub fn parse(allocator: *Allocator, input: []const u8) !Ast {
-    var ast: Ast = undefined;
-    ast.arena = Arena.init(allocator);
-    ast.kinds = List(Kind).init(&ast.arena.allocator);
-    ast.indices = List(usize).init(&ast.arena.allocator);
-    ast.children = List(List(usize)).init(&ast.arena.allocator);
-    ast.top_level = List(usize).init(&ast.arena.allocator);
-    ast.strings.data = List([]const u8).init(&ast.arena.allocator);
-    ast.strings.mapping = Map([]const u8, usize).init(&ast.arena.allocator);
-    try primeStrings(&ast.strings);
+pub fn parse(arena: *Arena, input: []const u8) !Ast {
+    var ast = Ast{
+        .kinds = List(Kind).init(&arena.allocator),
+        .indices = List(usize).init(&arena.allocator),
+        .children = List(List(usize)).init(&arena.allocator),
+        .top_level = List(usize).init(&arena.allocator),
+        .interned_strings = InternedStrings{
+            .data = List([]const u8).init(&arena.allocator),
+            .mapping = Map([]const u8, usize).init(&arena.allocator),
+        },
+        .arena = arena,
+    };
+    try primeStrings(&ast.interned_strings);
     var source = Source{ .input = input };
     while (source.input.len > 0) {
         const id = try expression(&ast, &source);
@@ -151,11 +127,11 @@ pub fn parse(allocator: *Allocator, input: []const u8) !Ast {
     return ast;
 }
 
-fn writeString(output: *List(u8), strings: Strings, kind: []const u8, index: usize) !void {
+fn writeString(output: *List(u8), interned_strings: InternedStrings, kind: []const u8, index: usize) !void {
     _ = try output.insert('(');
     try output.insertSlice(kind);
     _ = try output.insert(' ');
-    try output.insertSlice(strings.data.items[index]);
+    try output.insertSlice(interned_strings.data.items[index]);
     _ = try output.insert(')');
 }
 
@@ -174,9 +150,9 @@ fn expressionString(output: *List(u8), ast: Ast, index: usize, depth: usize) err
     while (i < depth) : (i += 1) _ = try output.insert(' ');
     const data_index = ast.indices.items[index];
     switch (ast.kinds.items[index]) {
-        .Int => try writeString(output, ast.strings, "int", data_index),
-        .Symbol => try writeString(output, ast.strings, "symbol", data_index),
-        .Keyword => try writeString(output, ast.strings, "keyword", data_index),
+        .Int => try writeString(output, ast.interned_strings, "int", data_index),
+        .Symbol => try writeString(output, ast.interned_strings, "symbol", data_index),
+        .Keyword => try writeString(output, ast.interned_strings, "keyword", data_index),
         .Parens => try writeList(output, ast, "parens", data_index, depth),
         .Brackets => try writeList(output, ast, "brackets", data_index, depth),
     }
