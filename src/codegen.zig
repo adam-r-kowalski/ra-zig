@@ -90,7 +90,7 @@ fn entryPoint(x86: *X86) !void {
     x86_block.operands = List([]const usize).init(allocator);
     try opLabel(allocator, x86_block, .Call, @enumToInt(Labels.Main));
     try opRegReg(allocator, x86_block, .Mov, .Rdi, .Rax);
-    try opRegImm(allocator, x86_block, .Mov, .Rdi, 0x02000001);
+    try opRegImm(allocator, x86_block, .Mov, .Rax, 0x02000001);
     try opNoArgs(x86_block, .Syscall);
 }
 
@@ -124,7 +124,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
                         assert(call.argument_entities.len == 2);
                         const rdx_value = overload.entities.values.get(call.argument_entities[0]).?;
                         try opRegLiteral(allocator, x86_block, .Mov, .Rdx, rdx_value);
-                        const rax_value = overload.entities.values.get(call.argument_entities[0]).?;
+                        const rax_value = overload.entities.values.get(call.argument_entities[1]).?;
                         try opRegLiteral(allocator, x86_block, .Mov, .Rax, rax_value);
                         try opRegReg(allocator, x86_block, .Add, .Rax, .Rdx);
                     },
@@ -150,6 +150,36 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: InternedStrings)
     return x86;
 }
 
+fn writeLabel(output: *List(u8), label: Label) !void {
+    switch (label) {
+        @enumToInt(Labels.EntryPoint) => try output.insertSlice("_main"),
+        @enumToInt(Labels.Main) => try output.insertSlice("main"),
+        else => unreachable,
+    }
+}
+
+fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
+    switch (instruction) {
+        .Mov => try output.insertSlice("mov"),
+        .Push => try output.insertSlice("push"),
+        .Pop => try output.insertSlice("pop"),
+        .Add => try output.insertSlice("add"),
+        .Call => try output.insertSlice("call"),
+        .Syscall => try output.insertSlice("syscall"),
+        .Ret => try output.insertSlice("ret"),
+    }
+}
+
+fn writeRegister(output: *List(u8), register: Register) !void {
+    switch (register) {
+        Register.Rax => try output.insertSlice("rax"),
+        Register.Rdx => try output.insertSlice("rdx"),
+        Register.Rbp => try output.insertSlice("rbp"),
+        Register.Rsp => try output.insertSlice("rsp"),
+        Register.Rdi => try output.insertSlice("rdi"),
+    }
+}
+
 pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStrings) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
@@ -158,5 +188,28 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
         \\
         \\    section .text
     );
+    for (x86.blocks.slice()) |block, label| {
+        _ = try output.insertSlice("\n\n");
+        try writeLabel(&output, label);
+        try output.insertSlice(":");
+        for (block.instructions.slice()) |instruction, j| {
+            try output.insertSlice("\n    ");
+            try writeInstruction(&output, instruction);
+            for (block.operand_kinds.items[j]) |operand_kind, k| {
+                const operands = block.operands.items[j];
+                if (k > 0) {
+                    _ = try output.insertSlice(", ");
+                } else {
+                    _ = try output.insert(' ');
+                }
+                switch (operand_kind) {
+                    .Immediate => try output.insertFormatted("{}", .{operands[k]}),
+                    .Register => try writeRegister(&output, @intToEnum(Register, operands[k])),
+                    .Label => try writeLabel(&output, operands[k]),
+                    .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
+                }
+            }
+        }
+    }
     return output;
 }

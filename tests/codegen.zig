@@ -31,6 +31,12 @@ test "add" {
         \\
         \\    section .text
         \\
+        \\_main:
+        \\    call main
+        \\    mov rdi, rax
+        \\    mov rax, 33554433
+        \\    syscall
+        \\
         \\main:
         \\    push rbp
         \\    mov rbp, rsp
@@ -39,11 +45,5 @@ test "add" {
         \\    add rax, rdx
         \\    pop rbp
         \\    ret
-        \\
-        \\_main:
-        \\    call main
-        \\    mov rdi, rax
-        \\    rax, 0x02000001
-        \\    syscall
     );
 }

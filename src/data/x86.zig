@@ -1,6 +1,7 @@
 const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const List = @import("list.zig").List;
+const InternedString = @import("interned_strings.zig").InternedString;
 
 pub const Instruction = enum(u8) {
     Mov,
