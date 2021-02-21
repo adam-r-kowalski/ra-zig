@@ -9,7 +9,6 @@ const List = data.List;
 const Map = data.Map;
 const Children = []const usize;
 const Ir = data.ir.Ir;
-const InternedString = data.ir.InternedString;
 const DeclarationKind = data.ir.DeclarationKind;
 const ExpressionKind = data.ir.ExpressionKind;
 const Function = data.ir.Function;
@@ -24,6 +23,7 @@ const Phi = data.ir.Phi;
 const SpecialForms = data.ir.SpecialForms;
 const Strings = data.interned_strings.Strings;
 const InternedStrings = data.interned_strings.InternedStrings;
+const InternedString = data.interned_strings.InternedString;
 
 fn astIndex(ast: Ast, kind: AstKind, ast_entity: usize) usize {
     assert(ast.kinds.items[ast_entity] == kind);

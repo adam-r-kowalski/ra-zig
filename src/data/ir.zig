@@ -2,6 +2,7 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const Map = @import("map.zig").Map;
 const List = @import("list.zig").List;
+const InternedString = @import("interned_strings.zig").InternedString;
 
 pub const Scopes = enum(usize) {
     External,
@@ -14,8 +15,6 @@ pub const SpecialForms = enum(usize) {
 };
 
 const String = []const u8;
-
-pub const InternedString = usize;
 
 pub const Scope = struct {
     name_to_entity: Map(InternedString, usize),

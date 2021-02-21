@@ -9,6 +9,7 @@ pub const Instruction = enum(u8) {
     Add,
     Call,
     Syscall,
+    Ret,
 };
 
 pub const Register = enum(usize) {
@@ -23,6 +24,7 @@ pub const Kind = enum(u8) {
     Immediate,
     Register,
     Label,
+    Literal,
 };
 
 pub const Labels = enum(usize) {

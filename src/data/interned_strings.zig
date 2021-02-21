@@ -5,9 +5,11 @@ const Arena = std.heap.ArenaAllocator;
 const List = @import("list.zig").List;
 const Map = @import("map.zig").Map;
 
+pub const InternedString = usize;
+
 pub const InternedStrings = struct {
     data: List([]const u8),
-    mapping: Map([]const u8, usize),
+    mapping: Map([]const u8, InternedString),
     arena: *Arena,
 
     pub fn deinit(self: *InternedStrings) void {
@@ -16,7 +18,7 @@ pub const InternedStrings = struct {
     }
 };
 
-pub fn intern(interned_strings: *InternedStrings, string: []const u8) !usize {
+pub fn intern(interned_strings: *InternedStrings, string: []const u8) !InternedString {
     const result = try interned_strings.mapping.getOrPut(string);
     if (result.found_existing)
         return result.entry.value;
@@ -27,13 +29,14 @@ pub fn intern(interned_strings: *InternedStrings, string: []const u8) !usize {
     return index;
 }
 
-pub const Strings = enum(usize) {
+pub const Strings = enum(InternedString) {
     Fn,
     Args,
     Ret,
     Body,
     If,
     Const,
+    Add,
 };
 
 pub fn prime(allocator: *Allocator) !InternedStrings {
@@ -42,7 +45,7 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
     var interned_strings = InternedStrings{
         .arena = arena,
         .data = List([]const u8).init(&arena.allocator),
-        .mapping = Map([]const u8, usize).init(&arena.allocator),
+        .mapping = Map([]const u8, InternedString).init(&arena.allocator),
     };
     const fn_symbol = try intern(&interned_strings, "fn");
     const args_keyword = try intern(&interned_strings, ":args");
@@ -50,11 +53,13 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
     const body_keyword = try intern(&interned_strings, ":body");
     const if_symbol = try intern(&interned_strings, "if");
     const const_symbol = try intern(&interned_strings, "const");
+    const add_symbol = try intern(&interned_strings, "+");
     assert(fn_symbol == @enumToInt(Strings.Fn));
     assert(args_keyword == @enumToInt(Strings.Args));
     assert(ret_keyword == @enumToInt(Strings.Ret));
     assert(body_keyword == @enumToInt(Strings.Body));
     assert(if_symbol == @enumToInt(Strings.If));
     assert(const_symbol == @enumToInt(Strings.Const));
+    assert(add_symbol == @enumToInt(Strings.Add));
     return interned_strings;
 }

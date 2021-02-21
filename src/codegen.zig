@@ -4,6 +4,8 @@ const Arena = std.heap.ArenaAllocator;
 const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
 const InternedStrings = data.interned_strings.InternedStrings;
+const InternedString = data.interned_strings.InternedString;
+const Strings = data.interned_strings.Strings;
 const DeclarationKind = data.ir.DeclarationKind;
 const IrBlock = data.ir.Block;
 const Ir = data.ir.Ir;
@@ -15,8 +17,11 @@ const Kind = data.x86.Kind;
 const Register = data.x86.Register;
 const List = data.List;
 
-fn call(allocator: *Allocator, x86_block: *X86Block, label: usize) !void {
-    _ = try x86_block.instructions.insert(.Call);
+const Label = usize;
+const Immediate = usize;
+
+fn opLabel(allocator: *Allocator, x86_block: *X86Block, op: Instruction, label: Label) !void {
+    _ = try x86_block.instructions.insert(op);
     const operand_kinds = try allocator.alloc(Kind, 1);
     operand_kinds[0] = .Label;
     _ = try x86_block.operand_kinds.insert(operand_kinds);
@@ -25,11 +30,11 @@ fn call(allocator: *Allocator, x86_block: *X86Block, label: usize) !void {
     _ = try x86_block.operands.insert(operands);
 }
 
-fn movRegReg(allocator: *Allocator, x86_block: *X86Block, to: Register, from: Register) !void {
-    _ = try x86_block.instructions.insert(.Call);
+fn opRegReg(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, from: Register) !void {
+    _ = try x86_block.instructions.insert(op);
     const operand_kinds = try allocator.alloc(Kind, 2);
-    operand_kinds[0] = .Label;
-    operand_kinds[1] = .Label;
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .Register;
     _ = try x86_block.operand_kinds.insert(operand_kinds);
     const operands = try allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
@@ -37,20 +42,42 @@ fn movRegReg(allocator: *Allocator, x86_block: *X86Block, to: Register, from: Re
     _ = try x86_block.operands.insert(operands);
 }
 
-fn movRegImm(allocator: *Allocator, x86_block: *X86Block, to: Register, immediate: usize) !void {
-    _ = try x86_block.instructions.insert(.Call);
+fn opRegImm(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, imm: Immediate) !void {
+    _ = try x86_block.instructions.insert(op);
     const operand_kinds = try allocator.alloc(Kind, 2);
-    operand_kinds[0] = .Label;
+    operand_kinds[0] = .Register;
     operand_kinds[1] = .Immediate;
     _ = try x86_block.operand_kinds.insert(operand_kinds);
     const operands = try allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
-    operands[1] = immediate;
+    operands[1] = imm;
     _ = try x86_block.operands.insert(operands);
 }
 
-fn syscall(x86_block: *X86Block) !void {
-    _ = try x86_block.instructions.insert(.Syscall);
+fn opRegLiteral(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, lit: InternedString) !void {
+    _ = try x86_block.instructions.insert(op);
+    const operand_kinds = try allocator.alloc(Kind, 2);
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .Literal;
+    _ = try x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try allocator.alloc(usize, 2);
+    operands[0] = @enumToInt(to);
+    operands[1] = lit;
+    _ = try x86_block.operands.insert(operands);
+}
+
+fn opReg(allocator: *Allocator, x86_block: *X86Block, op: Instruction, reg: Register) !void {
+    _ = try x86_block.instructions.insert(op);
+    const operand_kinds = try allocator.alloc(Kind, 1);
+    operand_kinds[0] = .Register;
+    _ = try x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try allocator.alloc(usize, 1);
+    operands[0] = @enumToInt(reg);
+    _ = try x86_block.operands.insert(operands);
+}
+
+fn opNoArgs(x86_block: *X86Block, op: Instruction) !void {
+    _ = try x86_block.instructions.insert(op);
     _ = try x86_block.operand_kinds.insert(&.{});
     _ = try x86_block.operands.insert(&.{});
 }
@@ -61,10 +88,10 @@ fn entryPoint(x86: *X86) !void {
     x86_block.instructions = List(Instruction).init(allocator);
     x86_block.operand_kinds = List([]const Kind).init(allocator);
     x86_block.operands = List([]const usize).init(allocator);
-    try call(allocator, x86_block, @enumToInt(Labels.Main));
-    try movRegReg(allocator, x86_block, .Rdi, .Rax);
-    try movRegImm(allocator, x86_block, .Rdi, 0x02000001);
-    try syscall(x86_block);
+    try opLabel(allocator, x86_block, .Call, @enumToInt(Labels.Main));
+    try opRegReg(allocator, x86_block, .Mov, .Rdi, .Rax);
+    try opRegImm(allocator, x86_block, .Mov, .Rdi, 0x02000001);
+    try opNoArgs(x86_block, .Syscall);
 }
 
 fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
@@ -81,13 +108,28 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
     x86_block.instructions = List(Instruction).init(allocator);
     x86_block.operand_kinds = List([]const Kind).init(allocator);
     x86_block.operands = List([]const usize).init(allocator);
+    try opReg(allocator, x86_block, .Push, .Rbp);
+    try opRegReg(allocator, x86_block, .Mov, .Rbp, .Rsp);
     const ir_block = &overload.blocks.items[overload.body_block_index];
     for (ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
-            .Return => unreachable,
+            .Return => {
+                try opReg(allocator, x86_block, .Pop, .Rbp);
+                try opNoArgs(x86_block, .Ret);
+            },
             .Call => {
-                // do something smarter
-                return;
+                const call = ir_block.calls.items[ir_block.indices.items[i]];
+                switch (overload.entities.names.get(call.function_entity).?) {
+                    @enumToInt(Strings.Add) => {
+                        assert(call.argument_entities.len == 2);
+                        const rdx_value = overload.entities.values.get(call.argument_entities[0]).?;
+                        try opRegLiteral(allocator, x86_block, .Mov, .Rdx, rdx_value);
+                        const rax_value = overload.entities.values.get(call.argument_entities[0]).?;
+                        try opRegLiteral(allocator, x86_block, .Mov, .Rax, rax_value);
+                        try opRegReg(allocator, x86_block, .Add, .Rax, .Rdx);
+                    },
+                    else => unreachable,
+                }
             },
             .Branch => unreachable,
             .Phi => unreachable,
@@ -108,7 +150,7 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: InternedStrings)
     return x86;
 }
 
-pub fn x86String(allocator: *Allocator, x86: X86) !List(u8) {
+pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStrings) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
     try output.insertSlice(

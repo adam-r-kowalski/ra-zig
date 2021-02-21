@@ -24,4 +24,26 @@ test "add" {
     defer ir.deinit();
     var x86 = try lang.codegen(allocator, ir, interned_strings);
     defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rdx, 10
+        \\    mov rax, 15
+        \\    add rax, rdx
+        \\    pop rbp
+        \\    ret
+        \\
+        \\_main:
+        \\    call main
+        \\    mov rdi, rax
+        \\    rax, 0x02000001
+        \\    syscall
+    );
 }
