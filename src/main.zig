@@ -1,28 +1,31 @@
 const std = @import("std");
+const Arena = std.heap.ArenaAllocator;
 const lang = @import("lang");
 
 pub fn main() anyerror!void {
     var timer = try std.time.Timer.start();
     const t0 = timer.read();
     // const allocator = std.heap.page_allocator;
-    // const arena = Arena.init(allocator);
+    // var arena = Arena.init(allocator);
     // defer arena.deinit();
+    // const temp_allocator = &arena.allocator;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(!gpa.deinit());
     const allocator = &gpa.allocator;
+    const temp_allocator = &gpa.allocator;
     const t1 = timer.read();
     var args = std.process.args();
     _ = args.skip();
-    const filename = try args.next(allocator).?;
-    defer allocator.free(filename);
+    const filename = try args.next(temp_allocator).?;
+    defer temp_allocator.free(filename);
     const t2 = timer.read();
     const cwd = std.fs.cwd();
     const source_file = try cwd.openFileZ(filename, .{ .read = true });
     defer source_file.close();
-    const source = try source_file.readToEndAlloc(allocator, std.math.maxInt(usize));
-    defer allocator.free(source);
+    const source = try source_file.readToEndAlloc(temp_allocator, std.math.maxInt(usize));
+    defer temp_allocator.free(source);
     const t3 = timer.read();
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    var interned_strings = try lang.data.interned_strings.prime(allocator);
     defer interned_strings.deinit();
     const t4 = timer.read();
     var ast = try lang.parse(allocator, &interned_strings, source);
