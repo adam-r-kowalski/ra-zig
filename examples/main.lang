@@ -1,5 +1,7 @@
 (fn main :args () :ret i64
   :body
-  (const x 30)
-  (const y 72)
-  (+ x y))
+  (const a 10)
+  (const b 20)
+  (const c 30)
+  (const d 40)
+  (+ a (+ b (+ c d))))

@@ -157,6 +157,9 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
     for (ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
             .Return => {
+                const ret = ir_block.returns.items[ir_block.indices.items[i]];
+                const reg = register_map.entity_to_register.get(ret).?;
+                if (reg != .Rax) try opRegReg(allocator, x86_block, .Mov, .Rax, reg);
                 try opReg(allocator, x86_block, .Pop, .Rbp);
                 try opNoArgs(x86_block, .Ret);
             },
