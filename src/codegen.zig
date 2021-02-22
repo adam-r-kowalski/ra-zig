@@ -16,9 +16,33 @@ const Instruction = data.x86.Instruction;
 const Kind = data.x86.Kind;
 const Register = data.x86.Register;
 const List = data.List;
-
+const Map = data.Map;
+const Overload = data.ir.Overload;
 const Label = usize;
 const Immediate = usize;
+const Entity = usize;
+
+const RegisterMap = struct {
+    entity_to_register: Map(Entity, Register),
+    register_to_entity: Map(Register, Entity),
+    free_registers: [14]Register,
+    length: u8,
+};
+
+fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
+    const n = register_map.free_registers.len;
+    assert(register_map.length < n);
+    register_map.length += 1;
+    register_map.registers[n - register_map.length] = register;
+}
+
+fn popFreeRegister(register_map: *RegisterMap) Register {
+    const n = register_map.free_registers.len;
+    assert(register_map.length > 0);
+    const register = register_map.free_registers[n - register_map.length];
+    register_map.length -= 1;
+    return register;
+}
 
 fn opLabel(allocator: *Allocator, x86_block: *X86Block, op: Instruction, label: Label) !void {
     _ = try x86_block.instructions.insert(op);
@@ -94,15 +118,34 @@ fn entryPoint(x86: *X86) !void {
     try opNoArgs(x86_block, .Syscall);
 }
 
+fn moveEntityToRegister(allocator: *Allocator, overload: Overload, x86_block: *X86Block, register_map: *RegisterMap, entity: Entity) !Register {
+    if (register_map.entity_to_register.get(entity)) |register| return register;
+    const value = overload.entities.values.get(entity).?;
+    const register = popFreeRegister(register_map);
+    try opRegLiteral(allocator, x86_block, .Mov, register, value);
+    try register_map.entity_to_register.put(entity, register);
+    try register_map.register_to_entity.put(register, entity);
+    return register;
+}
+
 fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
+    var register_map = RegisterMap{
+        .entity_to_register = Map(Entity, Register).init(&x86.arena.allocator),
+        .register_to_entity = Map(Register, Entity).init(&x86.arena.allocator),
+        .free_registers = .{
+            .Rax, .Rbx, .Rcx, .Rdx, .Rsi, .Rdi, .R8,
+            .R9,  .R10, .R11, .R12, .R13, .R14, .R15,
+        },
+        .length = 14,
+    };
     const name = interned_strings.mapping.get("main").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
     assert(declaration_kind == DeclarationKind.Function);
     assert(name == ir.names.items[index]);
-    const overloads = &ir.functions.items[ir.indices.items[index]];
+    const overloads = ir.functions.items[ir.indices.items[index]];
     assert(overloads.length == 1);
-    const overload = &overloads.items[0];
+    const overload = overloads.items[0];
     const allocator = &x86.arena.allocator;
     const x86_block = (try x86.blocks.addOne()).ptr;
     x86_block.instructions = List(Instruction).init(allocator);
@@ -122,11 +165,13 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
                 switch (overload.entities.names.get(call.function_entity).?) {
                     @enumToInt(Strings.Add) => {
                         assert(call.argument_entities.len == 2);
-                        const rdx_value = overload.entities.values.get(call.argument_entities[0]).?;
-                        try opRegLiteral(allocator, x86_block, .Mov, .Rdx, rdx_value);
-                        const rax_value = overload.entities.values.get(call.argument_entities[1]).?;
-                        try opRegLiteral(allocator, x86_block, .Mov, .Rax, rax_value);
-                        try opRegReg(allocator, x86_block, .Add, .Rax, .Rdx);
+                        const lhs_reg = try moveEntityToRegister(allocator, overload, x86_block, &register_map, call.argument_entities[0]);
+                        const rhs_entity = call.argument_entities[1];
+                        const rhs_reg = try moveEntityToRegister(allocator, overload, x86_block, &register_map, rhs_entity);
+                        try opRegReg(allocator, x86_block, .Add, lhs_reg, rhs_reg);
+                        try register_map.entity_to_register.put(call.result_entity, lhs_reg);
+                        try register_map.register_to_entity.put(lhs_reg, call.result_entity);
+                        register_map.entity_to_register.removeAssertDiscard(rhs_entity);
                     },
                     else => unreachable,
                 }
@@ -173,10 +218,21 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
 fn writeRegister(output: *List(u8), register: Register) !void {
     switch (register) {
         Register.Rax => try output.insertSlice("rax"),
+        Register.Rbx => try output.insertSlice("rbx"),
+        Register.Rcx => try output.insertSlice("rcx"),
         Register.Rdx => try output.insertSlice("rdx"),
         Register.Rbp => try output.insertSlice("rbp"),
         Register.Rsp => try output.insertSlice("rsp"),
+        Register.Rsi => try output.insertSlice("rsi"),
         Register.Rdi => try output.insertSlice("rdi"),
+        Register.R8 => try output.insertSlice("r8"),
+        Register.R9 => try output.insertSlice("r9"),
+        Register.R10 => try output.insertSlice("r10"),
+        Register.R11 => try output.insertSlice("r11"),
+        Register.R12 => try output.insertSlice("r12"),
+        Register.R13 => try output.insertSlice("r13"),
+        Register.R14 => try output.insertSlice("r14"),
+        Register.R15 => try output.insertSlice("r15"),
     }
 }
 

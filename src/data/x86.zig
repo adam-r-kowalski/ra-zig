@@ -15,10 +15,21 @@ pub const Instruction = enum(u8) {
 
 pub const Register = enum(usize) {
     Rax,
+    Rbx,
+    Rcx,
     Rdx,
     Rbp,
     Rsp,
+    Rsi,
     Rdi,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
 };
 
 pub const Kind = enum(u8) {
