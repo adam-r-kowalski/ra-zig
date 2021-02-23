@@ -327,3 +327,56 @@ test "binary operators on signed integers" {
         \\    ret
     );
 }
+
+test "denominator of division cannot be rdx" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 2)
+        \\  (const b 3)
+        \\  (const c (+ a b))
+        \\  (const d 10)
+        \\  (const e (* c d))
+        \\  (const f 5)
+        \\  (/ e f))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    call label0
+        \\    mov rdi, rax
+        \\    mov rax, 33554433
+        \\    syscall
+        \\
+        \\label0:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 2
+        \\    mov rbx, 3
+        \\    add rax, rbx
+        \\    mov rcx, 10
+        \\    imul rax, rcx
+        \\    mov rdx, 5
+        \\    mov rsi, rdx
+        \\    cqo
+        \\    idiv rsi
+        \\    pop rbp
+        \\    ret
+    );
+}

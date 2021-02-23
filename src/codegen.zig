@@ -216,12 +216,13 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
                         const lhs_register = .Rax;
                         try moveEntityToSpecificRegister(context, lhs_entity, lhs_register);
                         const rhs_entity = call.argument_entities[1];
-                        const rhs_register = try moveEntityToRegister(context, rhs_entity);
+                        var rhs_register = try moveEntityToRegister(context, rhs_entity);
                         if (register_map.register_to_entity.get(.Rdx)) |entity| {
                             const register = popFreeRegister(&register_map);
                             try opRegReg(context, .Mov, register, .Rdx);
                             try register_map.register_to_entity.put(register, entity);
                             try register_map.entity_to_register.put(entity, register);
+                            if (entity == rhs_entity) rhs_register = register;
                         }
                         try opNoArgs(x86_block, .Cqo);
                         try opReg(context, .Idiv, rhs_register);
