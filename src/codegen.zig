@@ -11,13 +11,13 @@ const IrBlock = data.ir.Block;
 const Ir = data.ir.Ir;
 const X86 = data.x86.X86;
 const X86Block = data.x86.Block;
-const Labels = data.x86.Labels;
 const Instruction = data.x86.Instruction;
 const Kind = data.x86.Kind;
 const Register = data.x86.Register;
 const List = data.List;
 const Map = data.Map;
 const Overload = data.ir.Overload;
+const Call = data.ir.Call;
 const Label = usize;
 const Immediate = usize;
 const Entity = usize;
@@ -33,7 +33,7 @@ fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
     const n = register_map.free_registers.len;
     assert(register_map.length < n);
     register_map.length += 1;
-    register_map.registers[n - register_map.length] = register;
+    register_map.free_registers[n - register_map.length] = register;
 }
 
 fn popFreeRegister(register_map: *RegisterMap) Register {
@@ -44,60 +44,67 @@ fn popFreeRegister(register_map: *RegisterMap) Register {
     return register;
 }
 
-fn opLabel(allocator: *Allocator, x86_block: *X86Block, op: Instruction, label: Label) !void {
+const Context = struct {
+    allocator: *Allocator,
+    overload: *const Overload,
+    x86_block: *X86Block,
+    register_map: *RegisterMap,
+};
+
+fn opLabel(context: Context, op: Instruction, label: Label) !void {
     _ = try x86_block.instructions.insert(op);
-    const operand_kinds = try allocator.alloc(Kind, 1);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
     operand_kinds[0] = .Label;
-    _ = try x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try allocator.alloc(usize, 1);
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
     operands[0] = label;
-    _ = try x86_block.operands.insert(operands);
+    _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opRegReg(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, from: Register) !void {
-    _ = try x86_block.instructions.insert(op);
-    const operand_kinds = try allocator.alloc(Kind, 2);
+fn opRegReg(context: Context, op: Instruction, to: Register, from: Register) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     operand_kinds[1] = .Register;
-    _ = try x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try allocator.alloc(usize, 2);
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
     operands[1] = @enumToInt(from);
-    _ = try x86_block.operands.insert(operands);
+    _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opRegImm(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, imm: Immediate) !void {
-    _ = try x86_block.instructions.insert(op);
-    const operand_kinds = try allocator.alloc(Kind, 2);
+fn opRegImm(context: Context, op: Instruction, to: Register, imm: Immediate) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     operand_kinds[1] = .Immediate;
-    _ = try x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try allocator.alloc(usize, 2);
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
     operands[1] = imm;
-    _ = try x86_block.operands.insert(operands);
+    _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opRegLiteral(allocator: *Allocator, x86_block: *X86Block, op: Instruction, to: Register, lit: InternedString) !void {
-    _ = try x86_block.instructions.insert(op);
-    const operand_kinds = try allocator.alloc(Kind, 2);
+fn opRegLiteral(context: Context, op: Instruction, to: Register, lit: InternedString) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     operand_kinds[1] = .Literal;
-    _ = try x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try allocator.alloc(usize, 2);
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
     operands[1] = lit;
-    _ = try x86_block.operands.insert(operands);
+    _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opReg(allocator: *Allocator, x86_block: *X86Block, op: Instruction, reg: Register) !void {
-    _ = try x86_block.instructions.insert(op);
-    const operand_kinds = try allocator.alloc(Kind, 1);
+fn opReg(context: Context, op: Instruction, reg: Register) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
     operand_kinds[0] = .Register;
-    _ = try x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try allocator.alloc(usize, 1);
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
     operands[0] = @enumToInt(reg);
-    _ = try x86_block.operands.insert(operands);
+    _ = try context.x86_block.operands.insert(operands);
 }
 
 fn opNoArgs(x86_block: *X86Block, op: Instruction) !void {
@@ -106,26 +113,55 @@ fn opNoArgs(x86_block: *X86Block, op: Instruction) !void {
     _ = try x86_block.operands.insert(&.{});
 }
 
-fn entryPoint(x86: *X86) !void {
-    const allocator = &x86.arena.allocator;
-    const x86_block = (try x86.blocks.addOne()).ptr;
-    x86_block.instructions = List(Instruction).init(allocator);
-    x86_block.operand_kinds = List([]const Kind).init(allocator);
-    x86_block.operands = List([]const usize).init(allocator);
-    try opLabel(allocator, x86_block, .Call, @enumToInt(Labels.Main));
-    try opRegReg(allocator, x86_block, .Mov, .Rdi, .Rax);
-    try opRegImm(allocator, x86_block, .Mov, .Rax, 0x02000001);
-    try opNoArgs(x86_block, .Syscall);
+fn moveEntityToRegister(context: Context, entity: Entity) !Register {
+    if (context.register_map.entity_to_register.get(entity)) |register| return register;
+    const value = context.overload.entities.values.get(entity).?;
+    const register = popFreeRegister(context.register_map);
+    try opRegLiteral(context, .Mov, register, value);
+    try context.register_map.entity_to_register.put(entity, register);
+    try context.register_map.register_to_entity.put(register, entity);
+    return register;
 }
 
-fn moveEntityToRegister(allocator: *Allocator, overload: Overload, x86_block: *X86Block, register_map: *RegisterMap, entity: Entity) !Register {
-    if (register_map.entity_to_register.get(entity)) |register| return register;
-    const value = overload.entities.values.get(entity).?;
-    const register = popFreeRegister(register_map);
-    try opRegLiteral(allocator, x86_block, .Mov, register, value);
-    try register_map.entity_to_register.put(entity, register);
-    try register_map.register_to_entity.put(register, entity);
-    return register;
+fn moveEntityToSpecificRegister(context: Context, entity: Entity, register: Register) !void {
+    if (context.register_map.register_to_entity.get(register)) |entity_in_register| {
+        if (entity_in_register == entity) return;
+        const free_register = popFreeRegister(context.register_map);
+        try opRegReg(context, .Mov, free_register, register);
+        try context.register_map.entity_to_register.put(entity_in_register, free_register);
+        try context.register_map.register_to_entity.put(free_register, entity_in_register);
+    } else {
+        const length = context.register_map.length - 1;
+        for (context.register_map.free_registers[0..length]) |current_register, i| {
+            if (current_register == register) {
+                context.register_map.free_registers[i] = context.register_map.free_registers[length];
+                context.register_map.free_registers[length] = context.register_map.free_registers[i];
+            }
+        }
+        context.register_map.length = length;
+    }
+    if (context.register_map.entity_to_register.get(entity)) |current_register| {
+        if (current_register == register) return;
+        try opRegReg(context, .Mov, register, current_register);
+        pushFreeRegister(context.register_map, current_register);
+    } else {
+        const value = context.overload.entities.values.get(entity).?;
+        try opRegLiteral(context, .Mov, register, value);
+    }
+    try context.register_map.entity_to_register.put(entity, register);
+    try context.register_map.register_to_entity.put(register, entity);
+}
+
+fn signedIntegerBinaryOperation(context: Context, call: Call, op: Instruction) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs_entity = call.argument_entities[0];
+    const lhs_register = try moveEntityToRegister(context, lhs_entity);
+    const rhs_entity = call.argument_entities[1];
+    const rhs_register = try moveEntityToRegister(context, rhs_entity);
+    try opRegReg(context, op, lhs_register, rhs_register);
+    try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
+    try context.register_map.register_to_entity.put(lhs_register, call.result_entity);
+    context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
 }
 
 fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
@@ -145,36 +181,53 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
     assert(name == ir.names.items[index]);
     const overloads = ir.functions.items[ir.indices.items[index]];
     assert(overloads.length == 1);
-    const overload = overloads.items[0];
     const allocator = &x86.arena.allocator;
     const x86_block = (try x86.blocks.addOne()).ptr;
     x86_block.instructions = List(Instruction).init(allocator);
     x86_block.operand_kinds = List([]const Kind).init(allocator);
     x86_block.operands = List([]const usize).init(allocator);
-    try opReg(allocator, x86_block, .Push, .Rbp);
-    try opRegReg(allocator, x86_block, .Mov, .Rbp, .Rsp);
-    const ir_block = &overload.blocks.items[overload.body_block_index];
+    const context = Context{
+        .allocator = allocator,
+        .overload = &overloads.items[0],
+        .x86_block = x86_block,
+        .register_map = &register_map,
+    };
+    try opReg(context, .Push, .Rbp);
+    try opRegReg(context, .Mov, .Rbp, .Rsp);
+    const ir_block = &context.overload.blocks.items[context.overload.body_block_index];
     for (ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
             .Return => {
                 const ret = ir_block.returns.items[ir_block.indices.items[i]];
                 const reg = register_map.entity_to_register.get(ret).?;
-                if (reg != .Rax) try opRegReg(allocator, x86_block, .Mov, .Rax, reg);
-                try opReg(allocator, x86_block, .Pop, .Rbp);
+                if (reg != .Rax) try opRegReg(context, .Mov, .Rax, reg);
+                try opReg(context, .Pop, .Rbp);
                 try opNoArgs(x86_block, .Ret);
             },
             .Call => {
                 const call = ir_block.calls.items[ir_block.indices.items[i]];
-                switch (overload.entities.names.get(call.function_entity).?) {
-                    @enumToInt(Strings.Add) => {
+                switch (context.overload.entities.names.get(call.function_entity).?) {
+                    @enumToInt(Strings.Add) => try signedIntegerBinaryOperation(context, call, .Add),
+                    @enumToInt(Strings.Subtract) => try signedIntegerBinaryOperation(context, call, .Sub),
+                    @enumToInt(Strings.Multiply) => try signedIntegerBinaryOperation(context, call, .Imul),
+                    @enumToInt(Strings.Divide) => {
                         assert(call.argument_entities.len == 2);
-                        const lhs_reg = try moveEntityToRegister(allocator, overload, x86_block, &register_map, call.argument_entities[0]);
+                        const lhs_entity = call.argument_entities[0];
+                        const lhs_register = .Rax;
+                        try moveEntityToSpecificRegister(context, lhs_entity, lhs_register);
                         const rhs_entity = call.argument_entities[1];
-                        const rhs_reg = try moveEntityToRegister(allocator, overload, x86_block, &register_map, rhs_entity);
-                        try opRegReg(allocator, x86_block, .Add, lhs_reg, rhs_reg);
-                        try register_map.entity_to_register.put(call.result_entity, lhs_reg);
-                        try register_map.register_to_entity.put(lhs_reg, call.result_entity);
-                        register_map.entity_to_register.removeAssertDiscard(rhs_entity);
+                        const rhs_register = try moveEntityToRegister(context, rhs_entity);
+                        if (register_map.register_to_entity.get(.Rdx)) |entity| {
+                            const register = popFreeRegister(&register_map);
+                            try opRegReg(context, .Mov, register, .Rdx);
+                            try register_map.register_to_entity.put(register, entity);
+                            try register_map.entity_to_register.put(entity, register);
+                        }
+                        try opNoArgs(x86_block, .Cqo);
+                        try opReg(context, .Idiv, rhs_register);
+                        try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
+                        try context.register_map.register_to_entity.put(lhs_register, call.result_entity);
+                        context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
                     },
                     else => unreachable,
                 }
@@ -193,17 +246,12 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: InternedStrings)
         .arena = arena,
         .blocks = List(X86Block).init(&arena.allocator),
     };
-    try entryPoint(&x86);
     try main(&x86, ir, interned_strings);
     return x86;
 }
 
 fn writeLabel(output: *List(u8), label: Label) !void {
-    switch (label) {
-        @enumToInt(Labels.EntryPoint) => try output.insertSlice("_main"),
-        @enumToInt(Labels.Main) => try output.insertSlice("main"),
-        else => unreachable,
-    }
+    try output.insertFormatted("label{}", .{label});
 }
 
 fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
@@ -212,8 +260,12 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Push => try output.insertSlice("push"),
         .Pop => try output.insertSlice("pop"),
         .Add => try output.insertSlice("add"),
+        .Sub => try output.insertSlice("sub"),
+        .Imul => try output.insertSlice("imul"),
+        .Idiv => try output.insertSlice("idiv"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
+        .Cqo => try output.insertSlice("cqo"),
         .Ret => try output.insertSlice("ret"),
     }
 }
@@ -246,6 +298,12 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
         \\    global _main
         \\
         \\    section .text
+        \\
+        \\_main:
+        \\    call label0
+        \\    mov rdi, rax
+        \\    mov rax, 33554433
+        \\    syscall
     );
     for (x86.blocks.slice()) |block, label| {
         _ = try output.insertSlice("\n\n");

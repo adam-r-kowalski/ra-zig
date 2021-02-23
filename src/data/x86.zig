@@ -8,8 +8,12 @@ pub const Instruction = enum(u8) {
     Push,
     Pop,
     Add,
+    Sub,
+    Imul,
+    Idiv,
     Call,
     Syscall,
+    Cqo,
     Ret,
 };
 
@@ -37,11 +41,6 @@ pub const Kind = enum(u8) {
     Register,
     Label,
     Literal,
-};
-
-pub const Labels = enum(usize) {
-    EntryPoint,
-    Main,
 };
 
 pub const Block = struct {
