@@ -52,6 +52,7 @@ pub const Block = struct {
 pub const X86 = struct {
     blocks: List(Block),
     arena: *Arena,
+    uses_print: bool,
 
     pub fn deinit(self: *@This()) void {
         self.arena.deinit();

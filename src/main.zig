@@ -34,7 +34,7 @@ pub fn main() anyerror!void {
     var ir = try lang.lower(allocator, ast);
     defer ir.deinit();
     const t6 = timer.read();
-    var x86 = try lang.codegen(allocator, ir, interned_strings);
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
     defer x86.deinit();
     const t7 = timer.read();
     var x86_string = try lang.x86String(allocator, x86, interned_strings);

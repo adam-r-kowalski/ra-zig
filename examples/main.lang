@@ -1,9 +1,4 @@
 (fn main :args () :ret i64
   :body
   (const a 2)
-  (const b 3)
-  (const c (+ a b))
-  (const d 10)
-  (const e (* c d))
-  (const f 5)
-  (/ e f))
+  (print a))
