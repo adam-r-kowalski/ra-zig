@@ -230,6 +230,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                         try opRegLiteral(context, .Mov, .Rdi, format_string);
                         const printf = try intern(interned_strings, "_printf");
                         try opLiteral(context, .Call, printf);
+                        try opRegLiteral(context, .Add, .Rsp, eight);
                         try context.register_map.entity_to_register.put(call.result_entity, .Rax);
                         try context.register_map.register_to_entity.put(.Rax, call.result_entity);
                         x86.uses_print = true;

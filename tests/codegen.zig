@@ -388,7 +388,7 @@ test "print a signed integer" {
     const source =
         \\(fn main :args () :ret i64
         \\  :body
-        \\  (const a 2)
+        \\  (const a 12345)
         \\  (print a))
     ;
     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
@@ -420,9 +420,11 @@ test "print a signed integer" {
         \\label0:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rsi, 2
+        \\    sub rsp, 8
+        \\    mov rsi, 12345
         \\    mov rdi, format_string
         \\    call _printf
+        \\    add rsp, 8
         \\    pop rbp
         \\    ret
     );
