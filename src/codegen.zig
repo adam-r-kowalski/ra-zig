@@ -181,8 +181,6 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
         .x86_block = x86_block,
         .register_map = &register_map,
     };
-    try opReg(context, .Push, .Rbp);
-    try opRegReg(context, .Mov, .Rbp, .Rsp);
     const ir_block = &context.overload.blocks.items[context.overload.body_block_index];
     for (ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
@@ -190,8 +188,10 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                 const ret = ir_block.returns.items[ir_block.indices.items[i]];
                 const reg = register_map.entity_to_register.get(ret).?;
                 if (reg != .Rax) try opRegReg(context, .Mov, .Rax, reg);
-                try opReg(context, .Pop, .Rbp);
-                try opNoArgs(x86_block, .Ret);
+                try opRegReg(context, .Mov, .Rdi, .Rax);
+                const sys_exit = try intern(interned_strings, "0x02000001");
+                try opRegLiteral(context, .Mov, .Rax, sys_exit);
+                try opNoArgs(x86_block, .Syscall);
             },
             .Call => {
                 const call = ir_block.calls.items[ir_block.indices.items[i]];
@@ -258,7 +258,11 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings
 }
 
 fn writeLabel(output: *List(u8), label: Label) !void {
-    try output.insertFormatted("label{}", .{label});
+    if (label == 0) {
+        try output.insertSlice("_main");
+    } else {
+        try output.insertFormatted("label{}", .{label});
+    }
 }
 
 fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
@@ -315,12 +319,6 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
     try output.insertSlice(
         \\
         \\    section .text
-        \\
-        \\_main:
-        \\    call label0
-        \\    mov rdi, rax
-        \\    mov rax, 33554433
-        \\    syscall
     );
     for (x86.blocks.slice()) |block, label| {
         _ = try output.insertSlice("\n\n");

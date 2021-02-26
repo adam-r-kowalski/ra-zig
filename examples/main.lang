@@ -1,4 +1,9 @@
 (fn main :args () :ret i64
   :body
-  (const a 32156)
-  (print a))
+  (const x 10)
+  (print x)
+  (const y 15)
+  (print y)
+  (const z (+ x y))
+  (print z))
+
