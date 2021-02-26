@@ -40,6 +40,7 @@ pub const Strings = enum(InternedString) {
     Subtract,
     Multiply,
     Divide,
+    Print,
 };
 
 pub fn prime(allocator: *Allocator) !InternedStrings {
@@ -60,15 +61,6 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
     const subtract_symbol = try intern(&interned_strings, "-");
     const multiply_symbol = try intern(&interned_strings, "*");
     const divide_symbol = try intern(&interned_strings, "/");
-    assert(fn_symbol == @enumToInt(Strings.Fn));
-    assert(args_keyword == @enumToInt(Strings.Args));
-    assert(ret_keyword == @enumToInt(Strings.Ret));
-    assert(body_keyword == @enumToInt(Strings.Body));
-    assert(if_symbol == @enumToInt(Strings.If));
-    assert(const_symbol == @enumToInt(Strings.Const));
-    assert(add_symbol == @enumToInt(Strings.Add));
-    assert(subtract_symbol == @enumToInt(Strings.Subtract));
-    assert(multiply_symbol == @enumToInt(Strings.Multiply));
-    assert(divide_symbol == @enumToInt(Strings.Divide));
+    const print_symbol = try intern(&interned_strings, "print");
     return interned_strings;
 }

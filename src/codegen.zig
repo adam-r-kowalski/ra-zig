@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
 const InternedStrings = data.interned_strings.InternedStrings;
 const InternedString = data.interned_strings.InternedString;
+const intern = data.interned_strings.intern;
 const Strings = data.interned_strings.Strings;
 const DeclarationKind = data.ir.DeclarationKind;
 const IrBlock = data.ir.Block;
@@ -51,13 +52,13 @@ const Context = struct {
     register_map: *RegisterMap,
 };
 
-fn opLabel(context: Context, op: Instruction, label: Label) !void {
-    _ = try x86_block.instructions.insert(op);
+fn opLiteral(context: Context, op: Instruction, lit: InternedString) !void {
+    _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 1);
-    operand_kinds[0] = .Label;
+    operand_kinds[0] = .Literal;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 1);
-    operands[0] = label;
+    operands[0] = lit;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -70,18 +71,6 @@ fn opRegReg(context: Context, op: Instruction, to: Register, from: Register) !vo
     const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
     operands[1] = @enumToInt(from);
-    _ = try context.x86_block.operands.insert(operands);
-}
-
-fn opRegImm(context: Context, op: Instruction, to: Register, imm: Immediate) !void {
-    _ = try context.x86_block.instructions.insert(op);
-    const operand_kinds = try context.allocator.alloc(Kind, 2);
-    operand_kinds[0] = .Register;
-    operand_kinds[1] = .Immediate;
-    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
-    const operands = try context.allocator.alloc(usize, 2);
-    operands[0] = @enumToInt(to);
-    operands[1] = imm;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -164,7 +153,7 @@ fn signedIntegerBinaryOperation(context: Context, call: Call, op: Instruction) !
     context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
 }
 
-fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
+fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
     var register_map = RegisterMap{
         .entity_to_register = Map(Entity, Register).init(&x86.arena.allocator),
         .register_to_entity = Map(Register, Entity).init(&x86.arena.allocator),
@@ -192,8 +181,6 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
         .x86_block = x86_block,
         .register_map = &register_map,
     };
-    try opReg(context, .Push, .Rbp);
-    try opRegReg(context, .Mov, .Rbp, .Rsp);
     const ir_block = &context.overload.blocks.items[context.overload.body_block_index];
     for (ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
@@ -201,8 +188,10 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
                 const ret = ir_block.returns.items[ir_block.indices.items[i]];
                 const reg = register_map.entity_to_register.get(ret).?;
                 if (reg != .Rax) try opRegReg(context, .Mov, .Rax, reg);
-                try opReg(context, .Pop, .Rbp);
-                try opNoArgs(x86_block, .Ret);
+                try opRegReg(context, .Mov, .Rdi, .Rax);
+                const sys_exit = try intern(interned_strings, "0x02000001");
+                try opRegLiteral(context, .Mov, .Rax, sys_exit);
+                try opNoArgs(x86_block, .Syscall);
             },
             .Call => {
                 const call = ir_block.calls.items[ir_block.indices.items[i]];
@@ -230,6 +219,22 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
                         try context.register_map.register_to_entity.put(lhs_register, call.result_entity);
                         context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
                     },
+                    @enumToInt(Strings.Print) => {
+                        assert(call.argument_entities.len == 1);
+                        assert(context.register_map.register_to_entity.get(.Rdi) == null);
+                        assert(context.register_map.register_to_entity.get(.Rax) == null);
+                        const eight = try intern(interned_strings, "8");
+                        try opRegLiteral(context, .Sub, .Rsp, eight);
+                        try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+                        const format_string = try intern(interned_strings, "format_string");
+                        try opRegLiteral(context, .Mov, .Rdi, format_string);
+                        const printf = try intern(interned_strings, "_printf");
+                        try opLiteral(context, .Call, printf);
+                        try opRegLiteral(context, .Add, .Rsp, eight);
+                        try context.register_map.entity_to_register.put(call.result_entity, .Rax);
+                        try context.register_map.register_to_entity.put(.Rax, call.result_entity);
+                        x86.uses_print = true;
+                    },
                     else => unreachable,
                 }
             },
@@ -240,19 +245,24 @@ fn main(x86: *X86, ir: Ir, interned_strings: InternedStrings) !void {
     }
 }
 
-pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: InternedStrings) !X86 {
+pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings) !X86 {
     const arena = try allocator.create(Arena);
     arena.* = Arena.init(allocator);
     var x86 = X86{
         .arena = arena,
         .blocks = List(X86Block).init(&arena.allocator),
+        .uses_print = false,
     };
     try main(&x86, ir, interned_strings);
     return x86;
 }
 
 fn writeLabel(output: *List(u8), label: Label) !void {
-    try output.insertFormatted("label{}", .{label});
+    if (label == 0) {
+        try output.insertSlice("_main");
+    } else {
+        try output.insertFormatted("label{}", .{label});
+    }
 }
 
 fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
@@ -295,16 +305,20 @@ fn writeRegister(output: *List(u8), register: Register) !void {
 pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStrings) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
+    try output.insertSlice("    global _main\n");
+    if (x86.uses_print) {
+        try output.insertSlice(
+            \\    extern _printf
+            \\
+            \\    section .data
+            \\
+            \\format_string: db "%ld", 10
+            \\
+        );
+    }
     try output.insertSlice(
-        \\    global _main
         \\
         \\    section .text
-        \\
-        \\_main:
-        \\    call label0
-        \\    mov rdi, rax
-        \\    mov rax, 33554433
-        \\    syscall
     );
     for (x86.blocks.slice()) |block, label| {
         _ = try output.insertSlice("\n\n");
