@@ -13,7 +13,7 @@ pub const total_available_registers = callee_saved_registers.len + caller_saved_
 
 const RegisterType = enum { CalleeSaved, CallerSaved };
 
-const register_type = blk: {
+pub const register_type = blk: {
     var array: [total_available_registers]RegisterType = undefined;
     for (callee_saved_registers) |register|
         array[@enumToInt(register)] = .CalleeSaved;

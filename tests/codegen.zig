@@ -33,10 +33,10 @@ test "add two signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 10
-        \\    mov rbx, 15
-        \\    add rax, rbx
-        \\    mov rdi, rax
+        \\    mov rbx, 10
+        \\    mov r12, 15
+        \\    add rbx, r12
+        \\    mov rdi, rbx
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -70,12 +70,12 @@ test "add three signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 10
-        \\    mov rbx, 20
-        \\    add rax, rbx
-        \\    mov rcx, 30
-        \\    add rax, rcx
-        \\    mov rdi, rax
+        \\    mov rbx, 10
+        \\    mov r12, 20
+        \\    add rbx, r12
+        \\    mov r13, 30
+        \\    add rbx, r13
+        \\    mov rdi, rbx
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -108,10 +108,10 @@ test "subtract two signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 10
-        \\    mov rbx, 15
-        \\    sub rax, rbx
-        \\    mov rdi, rax
+        \\    mov rbx, 10
+        \\    mov r12, 15
+        \\    sub rbx, r12
+        \\    mov rdi, rbx
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -144,10 +144,10 @@ test "multiply two signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 10
-        \\    mov rbx, 15
-        \\    imul rax, rbx
-        \\    mov rdi, rax
+        \\    mov rbx, 10
+        \\    mov r12, 15
+        \\    imul rbx, r12
+        \\    mov rdi, rbx
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -219,13 +219,12 @@ test "divide two signed integers where lhs is not in rax" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 2
-        \\    mov rbx, 3
-        \\    add rax, rbx
-        \\    mov rcx, rax
+        \\    mov rbx, 2
+        \\    mov r12, 3
+        \\    add rbx, r12
         \\    mov rax, 30
         \\    cqo
-        \\    idiv rcx
+        \\    idiv rbx
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
@@ -262,17 +261,17 @@ test "binary operators on signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 10
-        \\    mov rbx, 7
-        \\    sub rax, rbx
-        \\    mov rcx, 3
-        \\    imul rax, rcx
-        \\    mov rdx, 15
-        \\    add rax, rdx
-        \\    mov rsi, 2
-        \\    mov rdi, rdx
+        \\    mov rbx, 10
+        \\    mov r12, 7
+        \\    sub rbx, r12
+        \\    mov r13, 3
+        \\    imul rbx, r13
+        \\    mov r14, 15
+        \\    add rbx, r14
+        \\    mov rax, rbx
+        \\    mov rbx, 2
         \\    cqo
-        \\    idiv rsi
+        \\    idiv rbx
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
@@ -310,15 +309,15 @@ test "denominator of division cannot be rdx" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rax, 2
-        \\    mov rbx, 3
-        \\    add rax, rbx
-        \\    mov rcx, 10
-        \\    imul rax, rcx
-        \\    mov rdx, 5
-        \\    mov rsi, rdx
+        \\    mov rbx, 2
+        \\    mov r12, 3
+        \\    add rbx, r12
+        \\    mov r13, 10
+        \\    imul rbx, r13
+        \\    mov rax, rbx
+        \\    mov rbx, 5
         \\    cqo
-        \\    idiv rsi
+        \\    idiv rbx
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall

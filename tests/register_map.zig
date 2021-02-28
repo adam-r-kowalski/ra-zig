@@ -2,7 +2,6 @@ const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const lang = @import("lang");
-const RegisterMap = lang.data.RegisterMap;
 const pushFreeRegister = lang.register_map.pushFreeRegister;
 const popFreeRegister = lang.register_map.popFreeRegister;
 const initRegisterMap = lang.register_map.initRegisterMap;
