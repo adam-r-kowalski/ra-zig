@@ -22,28 +22,13 @@ const Call = data.ir.Call;
 const Label = usize;
 const Immediate = usize;
 const Entity = usize;
-
-const RegisterMap = struct {
-    entity_to_register: Map(Entity, Register),
-    register_to_entity: Map(Register, Entity),
-    free_registers: [14]Register,
-    length: u8,
-};
-
-fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
-    const n = register_map.free_registers.len;
-    assert(register_map.length < n);
-    register_map.length += 1;
-    register_map.free_registers[n - register_map.length] = register;
-}
-
-fn popFreeRegister(register_map: *RegisterMap) Register {
-    const n = register_map.free_registers.len;
-    assert(register_map.length > 0);
-    const register = register_map.free_registers[n - register_map.length];
-    register_map.length -= 1;
-    return register;
-}
+const RegisterMap = @import("register_map.zig").RegisterMap;
+const pushFreeRegister = @import("register_map.zig").pushFreeRegister;
+const popFreeRegister = @import("register_map.zig").popFreeRegister;
+const initRegisterMap = @import("register_map.zig").initRegisterMap;
+const deinitRegisterMap = @import("register_map.zig").deinitRegisterMap;
+const register_type = @import("register_map.zig").register_type;
+const caller_saved_registers = @import("register_map.zig").caller_saved_registers;
 
 const Context = struct {
     allocator: *Allocator,
@@ -105,29 +90,43 @@ fn opNoArgs(x86_block: *X86Block, op: Instruction) !void {
 fn moveEntityToRegister(context: Context, entity: Entity) !Register {
     if (context.register_map.entity_to_register.get(entity)) |register| return register;
     const value = context.overload.entities.values.get(entity).?;
-    const register = popFreeRegister(context.register_map);
+    const register = popFreeRegister(context.register_map).?;
     try opRegLiteral(context, .Mov, register, value);
     try context.register_map.entity_to_register.put(entity, register);
-    try context.register_map.register_to_entity.put(register, entity);
+    context.register_map.register_to_entity[@enumToInt(register)] = entity;
     return register;
 }
 
 fn moveEntityToSpecificRegister(context: Context, entity: Entity, register: Register) !void {
-    if (context.register_map.register_to_entity.get(register)) |entity_in_register| {
+    if (context.register_map.register_to_entity[@enumToInt(register)]) |entity_in_register| {
         if (entity_in_register == entity) return;
-        const free_register = popFreeRegister(context.register_map);
+        const free_register = popFreeRegister(context.register_map).?;
         try opRegReg(context, .Mov, free_register, register);
         try context.register_map.entity_to_register.put(entity_in_register, free_register);
-        try context.register_map.register_to_entity.put(free_register, entity_in_register);
+        context.register_map.register_to_entity[@enumToInt(free_register)] = entity_in_register;
     } else {
-        const length = context.register_map.length - 1;
-        for (context.register_map.free_registers[0..length]) |current_register, i| {
-            if (current_register == register) {
-                context.register_map.free_registers[i] = context.register_map.free_registers[length];
-                context.register_map.free_registers[length] = context.register_map.free_registers[i];
-            }
+        switch (register_type[@enumToInt(register)]) {
+            .CalleeSaved => {
+                const length = context.register_map.free_callee_saved_length - 1;
+                for (context.register_map.free_callee_saved_registers[0..length]) |current_register, i| {
+                    if (current_register == register) {
+                        context.register_map.free_callee_saved_registers[i] = context.register_map.free_callee_saved_registers[length];
+                        context.register_map.free_callee_saved_registers[length] = register;
+                    }
+                }
+                context.register_map.free_callee_saved_length = length;
+            },
+            .CallerSaved => {
+                const length = context.register_map.free_caller_saved_length - 1;
+                for (context.register_map.free_caller_saved_registers[0..length]) |current_register, i| {
+                    if (current_register == register) {
+                        context.register_map.free_caller_saved_registers[i] = context.register_map.free_caller_saved_registers[length];
+                        context.register_map.free_caller_saved_registers[length] = register;
+                    }
+                }
+                context.register_map.free_caller_saved_length = length;
+            },
         }
-        context.register_map.length = length;
     }
     if (context.register_map.entity_to_register.get(entity)) |current_register| {
         if (current_register == register) return;
@@ -138,7 +137,7 @@ fn moveEntityToSpecificRegister(context: Context, entity: Entity, register: Regi
         try opRegLiteral(context, .Mov, register, value);
     }
     try context.register_map.entity_to_register.put(entity, register);
-    try context.register_map.register_to_entity.put(register, entity);
+    context.register_map.register_to_entity[@enumToInt(register)] = entity;
 }
 
 fn signedIntegerBinaryOperation(context: Context, call: Call, op: Instruction) !void {
@@ -149,20 +148,39 @@ fn signedIntegerBinaryOperation(context: Context, call: Call, op: Instruction) !
     const rhs_register = try moveEntityToRegister(context, rhs_entity);
     try opRegReg(context, op, lhs_register, rhs_register);
     try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
-    try context.register_map.register_to_entity.put(lhs_register, call.result_entity);
+    context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
     context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
 }
 
+fn preserveCallerSaveRegisters(context: Context) !void {
+    for (caller_saved_registers) |register| {
+        if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
+            assert(context.register_map.free_callee_saved_length > 0);
+            const index = context.register_map.free_callee_saved_registers.len - context.register_map.free_callee_saved_length;
+            const free_register = context.register_map.free_callee_saved_registers[index];
+            context.register_map.free_callee_saved_length -= 1;
+            try opRegReg(context, .Mov, free_register, register);
+            try context.register_map.entity_to_register.put(entity, free_register);
+            context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
+            context.register_map.register_to_entity[@enumToInt(register)] = null;
+        }
+    }
+}
+
+fn ensureRegisterAvailable(context: Context, register: Register) !void {
+    if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
+        const free_register = popFreeRegister(context.register_map).?;
+        try opRegReg(context, .Mov, free_register, register);
+        pushFreeRegister(context.register_map, register);
+        try context.register_map.entity_to_register.put(entity, free_register);
+        context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
+        context.register_map.register_to_entity[@enumToInt(register)] = null;
+    }
+}
+
 fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
-    var register_map = RegisterMap{
-        .entity_to_register = Map(Entity, Register).init(&x86.arena.allocator),
-        .register_to_entity = Map(Register, Entity).init(&x86.arena.allocator),
-        .free_registers = .{
-            .Rax, .Rbx, .Rcx, .Rdx, .Rsi, .Rdi, .R8,
-            .R9,  .R10, .R11, .R12, .R13, .R14, .R15,
-        },
-        .length = 14,
-    };
+    var register_map = try initRegisterMap(x86.arena.child_allocator);
+    defer deinitRegisterMap(&register_map);
     const name = interned_strings.mapping.get("main").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
@@ -187,8 +205,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
             .Return => {
                 const ret = ir_block.returns.items[ir_block.indices.items[i]];
                 const reg = register_map.entity_to_register.get(ret).?;
-                if (reg != .Rax) try opRegReg(context, .Mov, .Rax, reg);
-                try opRegReg(context, .Mov, .Rdi, .Rax);
+                if (reg != .Rdi) try opRegReg(context, .Mov, .Rdi, reg);
                 const sys_exit = try intern(interned_strings, "0x02000001");
                 try opRegLiteral(context, .Mov, .Rax, sys_exit);
                 try opNoArgs(x86_block, .Syscall);
@@ -202,37 +219,38 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                     @enumToInt(Strings.Divide) => {
                         assert(call.argument_entities.len == 2);
                         const lhs_entity = call.argument_entities[0];
-                        const lhs_register = .Rax;
+                        const lhs_register = Register.Rax;
                         try moveEntityToSpecificRegister(context, lhs_entity, lhs_register);
                         const rhs_entity = call.argument_entities[1];
                         var rhs_register = try moveEntityToRegister(context, rhs_entity);
-                        if (register_map.register_to_entity.get(.Rdx)) |entity| {
-                            const register = popFreeRegister(&register_map);
+                        if (register_map.register_to_entity[@enumToInt(Register.Rdx)]) |entity| {
+                            const register = popFreeRegister(&register_map).?;
                             try opRegReg(context, .Mov, register, .Rdx);
-                            try register_map.register_to_entity.put(register, entity);
+                            register_map.register_to_entity[@enumToInt(register)] = entity;
                             try register_map.entity_to_register.put(entity, register);
                             if (entity == rhs_entity) rhs_register = register;
                         }
                         try opNoArgs(x86_block, .Cqo);
                         try opReg(context, .Idiv, rhs_register);
                         try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
-                        try context.register_map.register_to_entity.put(lhs_register, call.result_entity);
+                        context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
                         context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
                     },
                     @enumToInt(Strings.Print) => {
                         assert(call.argument_entities.len == 1);
-                        assert(context.register_map.register_to_entity.get(.Rdi) == null);
-                        assert(context.register_map.register_to_entity.get(.Rax) == null);
+                        try ensureRegisterAvailable(context, .Rdi);
+                        try ensureRegisterAvailable(context, .Rax);
                         const eight = try intern(interned_strings, "8");
                         try opRegLiteral(context, .Sub, .Rsp, eight);
                         try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+                        try preserveCallerSaveRegisters(context);
                         const format_string = try intern(interned_strings, "format_string");
                         try opRegLiteral(context, .Mov, .Rdi, format_string);
                         const printf = try intern(interned_strings, "_printf");
                         try opLiteral(context, .Call, printf);
                         try opRegLiteral(context, .Add, .Rsp, eight);
                         try context.register_map.entity_to_register.put(call.result_entity, .Rax);
-                        try context.register_map.register_to_entity.put(.Rax, call.result_entity);
+                        context.register_map.register_to_entity[@enumToInt(Register.Rax)] = call.result_entity;
                         x86.uses_print = true;
                     },
                     else => unreachable,

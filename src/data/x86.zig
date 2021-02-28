@@ -22,8 +22,6 @@ pub const Register = enum(usize) {
     Rbx,
     Rcx,
     Rdx,
-    Rbp,
-    Rsp,
     Rsi,
     Rdi,
     R8,
@@ -34,6 +32,8 @@ pub const Register = enum(usize) {
     R13,
     R14,
     R15,
+    Rbp,
+    Rsp,
 };
 
 pub const Kind = enum(u8) {
