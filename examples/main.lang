@@ -1,9 +1,11 @@
 (fn main :args () :ret i64
   :body
-  (const x 10)
-  (print x)
-  (const y 15)
-  (print y)
-  (const z (+ x y))
-  (print z))
+  (const a 10)
+  (print a)
+  (const b 15)
+  (print b)
+  (const c (+ a b))
+  (print c)
+  (const d (* c 30))
+  (print d))
 
