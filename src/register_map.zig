@@ -7,9 +7,20 @@ const Map = data.Map;
 const Register = data.x86.Register;
 const Entity = usize;
 
-const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8, .R9, .R10, .R11 };
-const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };
-const total_available_registers = callee_saved_registers.len + caller_saved_registers.len;
+pub const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8, .R9, .R10, .R11 };
+pub const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };
+pub const total_available_registers = callee_saved_registers.len + caller_saved_registers.len;
+
+const RegisterType = enum { CalleeSaved, CallerSaved };
+
+const register_type = blk: {
+    var array: [total_available_registers]RegisterType = undefined;
+    for (callee_saved_registers) |register|
+        array[@enumToInt(register)] = .CalleeSaved;
+    for (caller_saved_registers) |register|
+        array[@enumToInt(register)] = .CallerSaved;
+    break :blk array;
+};
 
 fn RegisterStack(comptime n: u8) type {
     return struct {
@@ -28,10 +39,20 @@ pub const RegisterMap = struct {
 };
 
 pub fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
-    const n = register_map.free_registers.len;
-    assert(register_map.length < n);
-    register_map.length += 1;
-    register_map.free_registers[n - register_map.length] = register;
+    switch (register_type[@enumToInt(register)]) {
+        .CalleeSaved => {
+            const n = register_map.free_callee_saved_registers.len;
+            assert(register_map.free_callee_saved_length < n);
+            register_map.free_callee_saved_length += 1;
+            register_map.free_callee_saved_registers[n - register_map.free_callee_saved_length] = register;
+        },
+        .CallerSaved => {
+            const n = register_map.free_caller_saved_registers.len;
+            assert(register_map.free_caller_saved_length < n);
+            register_map.free_caller_saved_length += 1;
+            register_map.free_caller_saved_registers[n - register_map.free_caller_saved_length] = register;
+        },
+    }
 }
 
 pub fn popFreeRegister(register_map: *RegisterMap) ?Register {

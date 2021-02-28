@@ -15,14 +15,110 @@ test "prefer callee saved registers" {
     const allocator = &gpa.allocator;
     var register_map = try initRegisterMap(allocator);
     defer deinitRegisterMap(&register_map);
-    var registers: [14]Register = undefined;
+    const n = lang.register_map.total_available_registers;
+    var registers: [n]Register = undefined;
     var i: usize = 0;
-    while (i < 14) : (i += 1) {
+    while (i < n) : (i += 1)
         registers[i] = popFreeRegister(&register_map).?;
-    }
     expectEqual(registers, .{
         .Rbx, .R12, .R13, .R14, .R15, .Rax, .Rcx,
         .Rdx, .Rsi, .Rdi, .R8,  .R9,  .R10, .R11,
     });
     expectEqual(popFreeRegister(&register_map), null);
+}
+
+test "pop caller saved registers in reverse order as pushed" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    var register_map = try initRegisterMap(allocator);
+    defer deinitRegisterMap(&register_map);
+    {
+        const n = lang.register_map.total_available_registers;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            _ = popFreeRegister(&register_map).?;
+    }
+    for (lang.register_map.caller_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    {
+        const n = lang.register_map.caller_saved_registers.len;
+        var registers: [n]Register = undefined;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            registers[i] = popFreeRegister(&register_map).?;
+        expectEqual(registers, .{ .R11, .R10, .R9, .R8, .Rdi, .Rsi, .Rdx, .Rcx, .Rax });
+        expectEqual(popFreeRegister(&register_map), null);
+    }
+}
+
+test "pop callee saved registers in reverse order as pushed" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    var register_map = try initRegisterMap(allocator);
+    defer deinitRegisterMap(&register_map);
+    {
+        const n = lang.register_map.total_available_registers;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            _ = popFreeRegister(&register_map).?;
+    }
+    for (lang.register_map.callee_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    {
+        const n = lang.register_map.callee_saved_registers.len;
+        var registers: [n]Register = undefined;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            registers[i] = popFreeRegister(&register_map).?;
+        expectEqual(registers, .{ .R15, .R14, .R13, .R12, .Rbx });
+        expectEqual(popFreeRegister(&register_map), null);
+    }
+}
+
+test "if caller saved and callee saved registers are available prefer callee saved" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    var register_map = try initRegisterMap(allocator);
+    defer deinitRegisterMap(&register_map);
+    {
+        const n = lang.register_map.total_available_registers;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            _ = popFreeRegister(&register_map).?;
+    }
+    for (lang.register_map.callee_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    for (lang.register_map.caller_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    {
+        const n = lang.register_map.total_available_registers;
+        var registers: [n]Register = undefined;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            registers[i] = popFreeRegister(&register_map).?;
+        expectEqual(registers, .{
+            .R15, .R14, .R13, .R12, .Rbx, .R11, .R10,
+            .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+        });
+        expectEqual(popFreeRegister(&register_map), null);
+    }
+    for (lang.register_map.caller_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    for (lang.register_map.callee_saved_registers) |register|
+        pushFreeRegister(&register_map, register);
+    {
+        const n = lang.register_map.total_available_registers;
+        var registers: [n]Register = undefined;
+        var i: usize = 0;
+        while (i < n) : (i += 1)
+            registers[i] = popFreeRegister(&register_map).?;
+        expectEqual(registers, .{
+            .R15, .R14, .R13, .R12, .Rbx, .R11, .R10,
+            .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+        });
+        expectEqual(popFreeRegister(&register_map), null);
+    }
 }
