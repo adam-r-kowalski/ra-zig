@@ -7,3 +7,4 @@ const module = @import("module.zig");
 pub const codegen = @import("codegen.zig").codegen;
 pub const x86String = @import("codegen.zig").x86String;
 pub const data = @import("data.zig");
+pub const register_map = @import("register_map.zig");
