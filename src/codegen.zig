@@ -28,6 +28,7 @@ const popFreeRegister = @import("register_map.zig").popFreeRegister;
 const initRegisterMap = @import("register_map.zig").initRegisterMap;
 const deinitRegisterMap = @import("register_map.zig").deinitRegisterMap;
 const register_type = @import("register_map.zig").register_type;
+const caller_saved_registers = @import("register_map.zig").caller_saved_registers;
 
 const Context = struct {
     allocator: *Allocator,
@@ -151,6 +152,32 @@ fn signedIntegerBinaryOperation(context: Context, call: Call, op: Instruction) !
     context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
 }
 
+fn preserveCallerSaveRegisters(context: Context) !void {
+    for (caller_saved_registers) |register| {
+        if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
+            assert(context.register_map.free_callee_saved_length > 0);
+            const index = context.register_map.free_callee_saved_registers.len - context.register_map.free_callee_saved_length;
+            const free_register = context.register_map.free_callee_saved_registers[index];
+            context.register_map.free_callee_saved_length -= 1;
+            try opRegReg(context, .Mov, free_register, register);
+            try context.register_map.entity_to_register.put(entity, free_register);
+            context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
+            context.register_map.register_to_entity[@enumToInt(register)] = null;
+        }
+    }
+}
+
+fn ensureRegisterAvailable(context: Context, register: Register) !void {
+    if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
+        const free_register = popFreeRegister(context.register_map).?;
+        try opRegReg(context, .Mov, free_register, register);
+        pushFreeRegister(context.register_map, register);
+        try context.register_map.entity_to_register.put(entity, free_register);
+        context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
+        context.register_map.register_to_entity[@enumToInt(register)] = null;
+    }
+}
+
 fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
     var register_map = try initRegisterMap(x86.arena.child_allocator);
     defer deinitRegisterMap(&register_map);
@@ -211,11 +238,12 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                     },
                     @enumToInt(Strings.Print) => {
                         assert(call.argument_entities.len == 1);
-                        assert(context.register_map.register_to_entity[@enumToInt(Register.Rdi)] == null);
-                        assert(context.register_map.register_to_entity[@enumToInt(Register.Rax)] == null);
+                        try ensureRegisterAvailable(context, .Rdi);
+                        try ensureRegisterAvailable(context, .Rax);
                         const eight = try intern(interned_strings, "8");
                         try opRegLiteral(context, .Sub, .Rsp, eight);
                         try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+                        try preserveCallerSaveRegisters(context);
                         const format_string = try intern(interned_strings, "format_string");
                         try opRegLiteral(context, .Mov, .Rdi, format_string);
                         const printf = try intern(interned_strings, "_printf");

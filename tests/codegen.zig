@@ -357,6 +357,68 @@ test "print a signed integer" {
         \\_main:
         \\    sub rsp, 8
         \\    mov rsi, 12345
+        \\    mov rbx, rsi
+        \\    mov rdi, format_string
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov rdi, rax
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "print three signed integer" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10)
+        \\  (print a)
+        \\  (const b 20)
+        \\  (print b)
+        \\  (const c 30)
+        \\  (print c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\format_string: db "%ld", 10
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    sub rsp, 8
+        \\    mov rsi, 10
+        \\    mov rbx, rsi
+        \\    mov rdi, format_string
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov r12, rax
+        \\    sub rsp, 8
+        \\    mov rsi, 20
+        \\    mov r13, rsi
+        \\    mov rdi, format_string
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov r14, rax
+        \\    sub rsp, 8
+        \\    mov rsi, 30
+        \\    mov r15, rsi
         \\    mov rdi, format_string
         \\    call _printf
         \\    add rsp, 8
