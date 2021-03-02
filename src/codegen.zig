@@ -330,7 +330,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
             \\
             \\    section .data
             \\
-            \\format_string: db "%ld", 10
+            \\format_string: db "%ld", 10, 0
             \\
         );
     }

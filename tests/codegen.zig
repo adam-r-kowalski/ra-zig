@@ -350,7 +350,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10
+        \\format_string: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -397,7 +397,7 @@ test "print three signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10
+        \\format_string: db "%ld", 10, 0
         \\
         \\    section .text
         \\
