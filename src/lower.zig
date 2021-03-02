@@ -17,6 +17,7 @@ const Scope = data.ir.Scope;
 const Scopes = data.ir.Scopes;
 const Block = data.ir.Block;
 const Entities = data.ir.Entities;
+const Entity = data.ir.Entity;
 const Call = data.ir.Call;
 const Branch = data.ir.Branch;
 const Phi = data.ir.Phi;
@@ -34,7 +35,7 @@ fn astChildren(ast: Ast, kind: AstKind, ast_entity: usize) Children {
     return ast.children.items[astIndex(ast, kind, ast_entity)].slice();
 }
 
-fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
+fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
     const name = ast.indices.items[ast_entity];
     switch (name) {
         @enumToInt(Strings.If) => return @enumToInt(SpecialForms.If),
@@ -46,8 +47,8 @@ fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: 
                 if (overload.scopes.items[active_scopes[i - 1]].name_to_entity.get(name)) |entity|
                     return entity;
             }
-            const entity = overload.entities.next_id;
-            overload.entities.next_id += 1;
+            const entity = overload.entities.next_entity;
+            overload.entities.next_entity += 1;
             try overload.entities.names.putNoClobber(entity, name);
             try overload.scopes.items[@enumToInt(Scopes.External)].name_to_entity.putNoClobber(name, entity);
             _ = try overload.scopes.items[@enumToInt(Scopes.External)].entities.insert(entity);
@@ -56,17 +57,17 @@ fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: 
     }
 }
 
-fn lowerNumber(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
+fn lowerNumber(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
     const number = ast.indices.items[ast_entity];
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
-    const entity = overload.entities.next_id;
-    overload.entities.next_id += 1;
+    const entity = overload.entities.next_entity;
+    overload.entities.next_entity += 1;
     try overload.entities.values.putNoClobber(entity, number);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
 }
 
-fn lowerIf(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !usize {
+fn lowerIf(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const condition_block = &overload.blocks.items[active_block.*];
     const condition_entity = try lowerExpression(allocator, overload, ast, active_block, children[0]);
     const then_block_index = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
@@ -86,8 +87,8 @@ fn lowerIf(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *
     const phi_block_id = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
     const phi_block = &overload.blocks.items[phi_block_id];
     _ = try phi_block.kinds.insert(.Phi);
-    const result_entity = overload.entities.next_id;
-    overload.entities.next_id += 1;
+    const result_entity = overload.entities.next_entity;
+    overload.entities.next_entity += 1;
     _ = try overload.scopes.items[phi_block.active_scopes[phi_block.active_scopes.len - 1]].entities.insert(result_entity);
     const phi_index = try phi_block.phis.insert(.{
         .result_entity = result_entity,
@@ -109,7 +110,7 @@ fn lowerIf(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *
     return result_entity;
 }
 
-fn lowerConst(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !usize {
+fn lowerConst(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
     const entity = try lowerExpression(allocator, overload, ast, active_block, children[1]);
     assert(children.len == 2);
@@ -121,14 +122,14 @@ fn lowerConst(allocator: *Allocator, overload: *Overload, ast: Ast, active_block
     return entity;
 }
 
-fn lowerCall(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, function_entity: usize, children: Children) !usize {
-    const argument_entities = try allocator.alloc(usize, children.len);
+fn lowerCall(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, function_entity: Entity, children: Children) !Entity {
+    const argument_entities = try allocator.alloc(Entity, children.len);
     for (children) |child, i|
         argument_entities[i] = try lowerExpression(allocator, overload, ast, active_block, child);
     const block = &overload.blocks.items[active_block.*];
     _ = try block.kinds.insert(.Call);
-    const result_entity = overload.entities.next_id;
-    overload.entities.next_id += 1;
+    const result_entity = overload.entities.next_entity;
+    overload.entities.next_entity += 1;
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(result_entity);
     const call_index = try block.calls.insert(.{
@@ -150,7 +151,7 @@ fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_bloc
     };
 }
 
-fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) error{OutOfMemory}!usize {
+fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) error{OutOfMemory}!Entity {
     return switch (ast.kinds.items[ast_entity]) {
         .Symbol => try lowerSymbol(overload, ast, active_block, ast_entity),
         .Int => try lowerNumber(overload, ast, active_block, ast_entity),
@@ -192,8 +193,8 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, childre
         const parameter = astChildren(ast, .Parens, parameters[i]);
         const parameter_name = astIndex(ast, .Symbol, parameter[0]);
         parameter_names[i] = parameter_name;
-        const entity = overload.entities.next_id;
-        overload.entities.next_id += 1;
+        const entity = overload.entities.next_entity;
+        overload.entities.next_entity += 1;
         try overload.entities.names.putNoClobber(entity, parameter_name);
         try overload.scopes.items[@enumToInt(Scopes.Function)].name_to_entity.putNoClobber(parameter_name, entity);
         _ = try overload.scopes.items[@enumToInt(Scopes.Function)].entities.insert(entity);
@@ -266,9 +267,10 @@ fn lowerOverload(allocator: *Allocator, function: *Function, ast: Ast, children:
     overload.blocks = List(Block).init(allocator);
     const next_id = @typeInfo(SpecialForms).Enum.fields.len;
     overload.entities = Entities{
-        .names = Map(usize, InternedString).init(allocator),
-        .values = Map(usize, InternedString).init(allocator),
-        .next_id = next_id,
+        .names = Map(Entity, InternedString).init(allocator),
+        .values = Map(Entity, InternedString).init(allocator),
+        .types = Map(Entity, Entity).init(allocator),
+        .next_entity = next_id,
     };
     var remaining_children = children;
     var keyword_to_children = Map(usize, Children).init(allocator);
