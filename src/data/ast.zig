@@ -9,6 +9,7 @@ pub const Source = struct {
 
 pub const Kind = enum(u8) {
     Int,
+    Float,
     Symbol,
     Keyword,
     Parens,

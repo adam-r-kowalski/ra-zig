@@ -27,15 +27,18 @@ fn insert(kind: Kind, ast: *Ast, interned_strings: *InternedStrings, source: *So
     return kind_index;
 }
 
-fn number(ast: *Ast, interned_strings: *InternedStrings, source: *Source) !usize {
+fn number(ast: *Ast, interned_strings: *InternedStrings, source: *Source, seen_decimal: usize) !usize {
+    var decimal_count = seen_decimal;
     var length: usize = 0;
     while (length < source.input.len) : (length += 1) {
         switch (source.input[length]) {
             '0'...'9' => continue,
+            '.' => decimal_count += 1,
             else => break,
         }
     }
-    return try insert(.Int, ast, interned_strings, source, length);
+    const kind = if (decimal_count > 0) Kind.Float else Kind.Int;
+    return try insert(kind, ast, interned_strings, source, length);
 }
 
 fn identifier(kind: Kind, ast: *Ast, interned_strings: *InternedStrings, source: *Source) !usize {
@@ -74,7 +77,8 @@ fn trimWhitespace(source: *Source) void {
 fn expression(ast: *Ast, interned_strings: *InternedStrings, source: *Source) error{OutOfMemory}!usize {
     trimWhitespace(source);
     return switch (source.input[0]) {
-        '0'...'9' => try number(ast, interned_strings, source),
+        '0'...'9' => try number(ast, interned_strings, source, 0),
+        '.' => try number(ast, interned_strings, source, 1),
         '(' => try list(.Parens, ')', ast, interned_strings, source),
         '[' => try list(.Brackets, ']', ast, interned_strings, source),
         ':' => try identifier(.Keyword, ast, interned_strings, source),
@@ -125,6 +129,7 @@ fn expressionString(output: *List(u8), ast: Ast, interned_strings: InternedStrin
     const data_index = ast.indices.items[index];
     switch (ast.kinds.items[index]) {
         .Int => try writeString(output, interned_strings, "int", data_index),
+        .Float => try writeString(output, interned_strings, "float", data_index),
         .Symbol => try writeString(output, interned_strings, "symbol", data_index),
         .Keyword => try writeString(output, interned_strings, "keyword", data_index),
         .Parens => try writeList(output, ast, interned_strings, "parens", data_index, depth),

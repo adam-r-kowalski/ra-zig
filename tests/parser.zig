@@ -23,6 +23,23 @@ test "int" {
     );
 }
 
+test "float" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const source = "12.3 4.75 .923";
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, interned_strings);
+    defer ast_string.deinit();
+    expectEqualStrings(ast_string.slice(),
+        \\(float 12.3)
+        \\(float 4.75)
+        \\(float .923)
+    );
+}
+
 test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());

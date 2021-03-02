@@ -56,12 +56,12 @@ fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: 
     }
 }
 
-fn lowerInt(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
-    const integer = ast.indices.items[ast_entity];
+fn lowerNumber(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !usize {
+    const number = ast.indices.items[ast_entity];
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     const entity = overload.entities.next_id;
     overload.entities.next_id += 1;
-    try overload.entities.values.putNoClobber(entity, integer);
+    try overload.entities.values.putNoClobber(entity, number);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
 }
@@ -153,7 +153,8 @@ fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_bloc
 fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) error{OutOfMemory}!usize {
     return switch (ast.kinds.items[ast_entity]) {
         .Symbol => try lowerSymbol(overload, ast, active_block, ast_entity),
-        .Int => try lowerInt(overload, ast, active_block, ast_entity),
+        .Int => try lowerNumber(overload, ast, active_block, ast_entity),
+        .Float => try lowerNumber(overload, ast, active_block, ast_entity),
         .Parens => try lowerParens(allocator, overload, ast, active_block, ast_entity),
         else => std.debug.panic("entity kind {} not yet supported!", .{ast.kinds.items[ast_entity]}),
     };
@@ -322,6 +323,7 @@ pub fn lower(allocator: *Allocator, ast: Ast) !Ir {
 
 fn writeParameterName(output: *List(u8), overload: Overload, interned_strings: InternedStrings) !void {
     try output.insertSlice("\n  :parameter-names (");
+    if (overload.parameter_names.len == 0) return;
     const last = overload.parameter_names.len - 1;
     for (overload.parameter_names) |parameter_name, i| {
         try output.insertSlice(interned_strings.data.items[parameter_name]);
@@ -332,6 +334,7 @@ fn writeParameterName(output: *List(u8), overload: Overload, interned_strings: I
 
 fn writeParameterTypeBlock(output: *List(u8), overload: Overload) !void {
     try output.insertSlice(")\n  :parameter-type-blocks (");
+    if (overload.parameter_type_block_indices.len == 0) return;
     const last = overload.parameter_type_block_indices.len - 1;
     for (overload.parameter_type_block_indices) |block_index, i| {
         try output.insertFormatted("%b{}", .{block_index});
