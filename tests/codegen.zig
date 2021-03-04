@@ -350,7 +350,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10
+        \\byte17: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -358,7 +358,7 @@ test "print a signed integer" {
         \\    sub rsp, 8
         \\    mov rsi, 12345
         \\    mov rbx, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte17
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax
@@ -397,7 +397,7 @@ test "print three signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10
+        \\byte21: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -405,21 +405,59 @@ test "print three signed integer" {
         \\    sub rsp, 8
         \\    mov rsi, 10
         \\    mov rbx, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
         \\    mov r12, rax
         \\    sub rsp, 8
         \\    mov rsi, 20
         \\    mov r13, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
         \\    mov r14, rax
         \\    sub rsp, 8
         \\    mov rsi, 30
         \\    mov r15, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov rdi, rax
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "print a signed float" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source = "(fn main :args () :ret i64 :body (print 12.345))";
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte16: db "%f", 10, 0
+        \\quad_word14: dq 12.345
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    sub rsp, 8
+        \\    movsd xmm0, [rel quad_word14]
+        \\    mov rdi, byte16
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax

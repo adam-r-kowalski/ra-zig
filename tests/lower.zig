@@ -2,7 +2,44 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const lang = @import("lang");
 
-test "ir form" {
+test "main" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body 0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn main
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name %t0 :value 0))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return %t0)))
+    );
+}
+
+test "unicode characters and compound expressions" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
@@ -25,7 +62,6 @@ test "ir form" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name f64)
         \\    (entity :name √)
         \\    (entity :name +)
         \\    (entity :name ^))
@@ -85,7 +121,6 @@ test "conditionals" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name i64)
         \\    (entity :name >))
         \\  (scope %function
         \\    (entity :name x)
@@ -126,7 +161,7 @@ test "conditionals" {
     );
 }
 
-test "constants" {
+test "int constants" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
@@ -152,7 +187,6 @@ test "constants" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name i64)
         \\    (entity :name ^)
         \\    (entity :name +))
         \\  (scope %function
@@ -177,6 +211,65 @@ test "constants" {
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
         \\    (return i64))
+        \\  (block %b3 :scopes (%external %function %s3)
+        \\    :expressions
+        \\    (const x2 (^ x %t0))
+        \\    (const y2 (^ y %t1))
+        \\    (const %t2 (+ x2 y2))
+        \\    (return %t2)))
+    );
+}
+
+test "float constants" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn sum-of-squares :args ((x f64) (y f64)) :ret f64
+        \\  :body
+        \\  (const x2 (^ x 2.0))
+        \\  (const y2 (^ y 2.0))
+        \\  (+ x2 y2))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn sum-of-squares
+        \\  :parameter-names (x y)
+        \\  :parameter-type-blocks (%b0 %b1)
+        \\  :return-type-blocks %b2
+        \\  :body-block %b3
+        \\  :scopes
+        \\  (scope %external
+        \\    (entity :name ^)
+        \\    (entity :name +))
+        \\  (scope %function
+        \\    (entity :name x)
+        \\    (entity :name y))
+        \\  (scope %s0)
+        \\  (scope %s1)
+        \\  (scope %s2)
+        \\  (scope %s3
+        \\    (entity :name %t0 :value 2.0)
+        \\    (entity :name x2)
+        \\    (entity :name %t1 :value 2.0)
+        \\    (entity :name y2)
+        \\    (entity :name %t2))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return f64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return f64))
+        \\  (block %b2 :scopes (%external %function %s2)
+        \\    :expressions
+        \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
         \\    (const x2 (^ x %t0))
@@ -213,7 +306,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name circle)
-        \\    (entity :name f64)
         \\    (entity :name *)
         \\    (entity :name π)
         \\    (entity :name ^)
@@ -249,7 +341,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name rectangle)
-        \\    (entity :name f64)
         \\    (entity :name *)
         \\    (entity :name width)
         \\    (entity :name height))

@@ -5,7 +5,7 @@ const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
 const Map = data.Map;
 const Register = data.x86.Register;
-const Entity = usize;
+const Entity = data.ir.Entity;
 
 pub const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8, .R9, .R10, .R11 };
 pub const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };

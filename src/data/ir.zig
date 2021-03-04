@@ -4,21 +4,25 @@ const Map = @import("map.zig").Map;
 const List = @import("list.zig").List;
 const InternedString = @import("interned_strings.zig").InternedString;
 
+pub const Entity = usize;
+
 pub const Scopes = enum(usize) {
     External,
     Function,
 };
 
-pub const SpecialForms = enum(usize) {
+pub const Builtins = enum(usize) {
     If,
     Const,
+    I64,
+    F64,
 };
 
 const String = []const u8;
 
 pub const Scope = struct {
-    name_to_entity: Map(InternedString, usize),
-    entities: List(usize),
+    name_to_entity: Map(InternedString, Entity),
+    entities: List(Entity),
 };
 
 pub const ExpressionKind = enum(u8) {
@@ -29,24 +33,29 @@ pub const ExpressionKind = enum(u8) {
     Jump,
 };
 
+pub const LiteralKind = enum(u8) {
+    Int,
+    Float,
+};
+
 pub const Call = struct {
-    result_entity: usize,
-    function_entity: usize,
-    argument_entities: []const usize,
+    result_entity: Entity,
+    function_entity: Entity,
+    argument_entities: []const Entity,
 };
 
 pub const Branch = struct {
-    condition_entity: usize,
+    condition_entity: Entity,
     then_block_index: usize,
     else_block_index: usize,
 };
 
 pub const Phi = struct {
-    result_entity: usize,
+    result_entity: Entity,
     then_block_index: usize,
-    then_entity: usize,
+    then_entity: Entity,
     else_block_index: usize,
-    else_entity: usize,
+    else_entity: Entity,
 };
 
 pub const Block = struct {
@@ -61,9 +70,10 @@ pub const Block = struct {
 };
 
 pub const Entities = struct {
-    names: Map(usize, InternedString),
-    values: Map(usize, InternedString),
-    next_id: usize,
+    names: Map(Entity, InternedString),
+    values: Map(Entity, InternedString),
+    kinds: Map(Entity, LiteralKind),
+    next_entity: Entity,
 };
 
 pub const Overload = struct {
