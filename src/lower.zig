@@ -11,6 +11,7 @@ const Children = []const usize;
 const Ir = data.ir.Ir;
 const DeclarationKind = data.ir.DeclarationKind;
 const ExpressionKind = data.ir.ExpressionKind;
+const LiteralKind = data.ir.LiteralKind;
 const Function = data.ir.Function;
 const Overload = data.ir.Overload;
 const Scope = data.ir.Scope;
@@ -21,7 +22,7 @@ const Entity = data.ir.Entity;
 const Call = data.ir.Call;
 const Branch = data.ir.Branch;
 const Phi = data.ir.Phi;
-const SpecialForms = data.ir.SpecialForms;
+const Builtins = data.ir.Builtins;
 const Strings = data.interned_strings.Strings;
 const InternedStrings = data.interned_strings.InternedStrings;
 const InternedString = data.interned_strings.InternedString;
@@ -38,8 +39,10 @@ fn astChildren(ast: Ast, kind: AstKind, ast_entity: usize) Children {
 fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
     const name = ast.indices.items[ast_entity];
     switch (name) {
-        @enumToInt(Strings.If) => return @enumToInt(SpecialForms.If),
-        @enumToInt(Strings.Const) => return @enumToInt(SpecialForms.Const),
+        @enumToInt(Strings.If) => return @enumToInt(Builtins.If),
+        @enumToInt(Strings.Const) => return @enumToInt(Builtins.Const),
+        @enumToInt(Strings.I64) => return @enumToInt(Builtins.I64),
+        @enumToInt(Strings.F64) => return @enumToInt(Builtins.F64),
         else => {
             const active_scopes = overload.blocks.items[active_block.*].active_scopes;
             var i: usize = active_scopes.len;
@@ -57,12 +60,13 @@ fn lowerSymbol(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: 
     }
 }
 
-fn lowerNumber(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
+fn lowerNumber(overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize, kind: LiteralKind) !Entity {
     const number = ast.indices.items[ast_entity];
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     const entity = overload.entities.next_entity;
     overload.entities.next_entity += 1;
     try overload.entities.values.putNoClobber(entity, number);
+    try overload.entities.kinds.putNoClobber(entity, kind);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
 }
@@ -145,8 +149,8 @@ fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_bloc
     const children = ast.children.items[ast.indices.items[ast_entity]].slice();
     const function = try lowerExpression(allocator, overload, ast, active_block, children[0]);
     return switch (function) {
-        @enumToInt(SpecialForms.If) => lowerIf(allocator, overload, ast, active_block, children[1..]),
-        @enumToInt(SpecialForms.Const) => lowerConst(allocator, overload, ast, active_block, children[1..]),
+        @enumToInt(Builtins.If) => lowerIf(allocator, overload, ast, active_block, children[1..]),
+        @enumToInt(Builtins.Const) => lowerConst(allocator, overload, ast, active_block, children[1..]),
         else => lowerCall(allocator, overload, ast, active_block, function, children[1..]),
     };
 }
@@ -154,8 +158,8 @@ fn lowerParens(allocator: *Allocator, overload: *Overload, ast: Ast, active_bloc
 fn lowerExpression(allocator: *Allocator, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) error{OutOfMemory}!Entity {
     return switch (ast.kinds.items[ast_entity]) {
         .Symbol => try lowerSymbol(overload, ast, active_block, ast_entity),
-        .Int => try lowerNumber(overload, ast, active_block, ast_entity),
-        .Float => try lowerNumber(overload, ast, active_block, ast_entity),
+        .Int => try lowerNumber(overload, ast, active_block, ast_entity, .Int),
+        .Float => try lowerNumber(overload, ast, active_block, ast_entity, .Float),
         .Parens => try lowerParens(allocator, overload, ast, active_block, ast_entity),
         else => std.debug.panic("entity kind {} not yet supported!", .{ast.kinds.items[ast_entity]}),
     };
@@ -265,11 +269,11 @@ fn lowerOverload(allocator: *Allocator, function: *Function, ast: Ast, children:
         .entities = List(usize).init(allocator),
     });
     overload.blocks = List(Block).init(allocator);
-    const next_id = @typeInfo(SpecialForms).Enum.fields.len;
+    const next_id = @typeInfo(Builtins).Enum.fields.len;
     overload.entities = Entities{
         .names = Map(Entity, InternedString).init(allocator),
         .values = Map(Entity, InternedString).init(allocator),
-        .types = Map(Entity, Entity).init(allocator),
+        .kinds = Map(Entity, LiteralKind).init(allocator),
         .next_entity = next_id,
     };
     var remaining_children = children;
@@ -403,10 +407,16 @@ fn writeEntity(writer: Writer, block_entity: usize) !void {
     const output = writer.output;
     const overload = writer.overload;
     const interned_strings = writer.interned_strings;
-    if (overload.entities.names.get(block_entity)) |string_index| {
-        try output.insertSlice(interned_strings.data.items[string_index]);
-    } else if (writer.anonymous_entity_to_name.get(block_entity)) |name| {
-        try output.insertFormatted("%t{}", .{name});
+    switch (block_entity) {
+        @enumToInt(Builtins.I64) => try output.insertSlice("i64"),
+        @enumToInt(Builtins.F64) => try output.insertSlice("f64"),
+        else => {
+            if (overload.entities.names.get(block_entity)) |string_index| {
+                try output.insertSlice(interned_strings.data.items[string_index]);
+            } else if (writer.anonymous_entity_to_name.get(block_entity)) |name| {
+                try output.insertFormatted("%t{}", .{name});
+            }
+        },
     }
 }
 

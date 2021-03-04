@@ -11,9 +11,11 @@ pub const Scopes = enum(usize) {
     Function,
 };
 
-pub const SpecialForms = enum(usize) {
+pub const Builtins = enum(usize) {
     If,
     Const,
+    I64,
+    F64,
 };
 
 const String = []const u8;
@@ -29,6 +31,11 @@ pub const ExpressionKind = enum(u8) {
     Branch,
     Phi,
     Jump,
+};
+
+pub const LiteralKind = enum(u8) {
+    Int,
+    Float,
 };
 
 pub const Call = struct {
@@ -65,7 +72,7 @@ pub const Block = struct {
 pub const Entities = struct {
     names: Map(Entity, InternedString),
     values: Map(Entity, InternedString),
-    types: Map(Entity, Entity),
+    kinds: Map(Entity, LiteralKind),
     next_entity: Entity,
 };
 

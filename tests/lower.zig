@@ -24,8 +24,7 @@ test "main" {
         \\  :return-type-blocks %b0
         \\  :body-block %b1
         \\  :scopes
-        \\  (scope %external
-        \\    (entity :name i64))
+        \\  (scope %external)
         \\  (scope %function)
         \\  (scope %s0)
         \\  (scope %s1
@@ -63,7 +62,6 @@ test "unicode characters and compound expressions" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name f64)
         \\    (entity :name √)
         \\    (entity :name +)
         \\    (entity :name ^))
@@ -123,7 +121,6 @@ test "conditionals" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name i64)
         \\    (entity :name >))
         \\  (scope %function
         \\    (entity :name x)
@@ -190,7 +187,6 @@ test "int constants" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name i64)
         \\    (entity :name ^)
         \\    (entity :name +))
         \\  (scope %function
@@ -250,7 +246,6 @@ test "float constants" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name f64)
         \\    (entity :name ^)
         \\    (entity :name +))
         \\  (scope %function
@@ -311,7 +306,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name circle)
-        \\    (entity :name f64)
         \\    (entity :name *)
         \\    (entity :name π)
         \\    (entity :name ^)
@@ -347,7 +341,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name rectangle)
-        \\    (entity :name f64)
         \\    (entity :name *)
         \\    (entity :name width)
         \\    (entity :name height))

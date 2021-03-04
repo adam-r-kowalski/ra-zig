@@ -8,4 +8,3 @@
   (print c)
   (const d (* c 30))
   (print d))
-

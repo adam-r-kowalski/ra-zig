@@ -36,6 +36,8 @@ pub const Strings = enum(InternedString) {
     Body,
     If,
     Const,
+    I64,
+    F64,
     Add,
     Subtract,
     Multiply,
@@ -51,16 +53,18 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
         .data = List([]const u8).init(&arena.allocator),
         .mapping = Map([]const u8, InternedString).init(&arena.allocator),
     };
-    const fn_symbol = try intern(&interned_strings, "fn");
-    const args_keyword = try intern(&interned_strings, ":args");
-    const ret_keyword = try intern(&interned_strings, ":ret");
-    const body_keyword = try intern(&interned_strings, ":body");
-    const if_symbol = try intern(&interned_strings, "if");
-    const const_symbol = try intern(&interned_strings, "const");
-    const add_symbol = try intern(&interned_strings, "+");
-    const subtract_symbol = try intern(&interned_strings, "-");
-    const multiply_symbol = try intern(&interned_strings, "*");
-    const divide_symbol = try intern(&interned_strings, "/");
-    const print_symbol = try intern(&interned_strings, "print");
+    _ = try intern(&interned_strings, "fn");
+    _ = try intern(&interned_strings, ":args");
+    _ = try intern(&interned_strings, ":ret");
+    _ = try intern(&interned_strings, ":body");
+    _ = try intern(&interned_strings, "if");
+    _ = try intern(&interned_strings, "const");
+    _ = try intern(&interned_strings, "i64");
+    _ = try intern(&interned_strings, "f64");
+    _ = try intern(&interned_strings, "+");
+    _ = try intern(&interned_strings, "-");
+    _ = try intern(&interned_strings, "*");
+    _ = try intern(&interned_strings, "/");
+    _ = try intern(&interned_strings, "print");
     return interned_strings;
 }
