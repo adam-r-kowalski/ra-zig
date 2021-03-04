@@ -450,14 +450,14 @@ test "print a signed float" {
         \\    section .data
         \\
         \\byte16: db "%f", 10, 0
-        \\float0: dq 12.345
+        \\quad_word14: dq 12.345
         \\
         \\    section .text
         \\
         \\_main:
         \\    sub rsp, 8
-        \\    movsd xmm0, [rel float0]
-        \\    mov rdi, format_string
+        \\    movsd xmm0, [rel quad_word14]
+        \\    mov rdi, byte16
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax

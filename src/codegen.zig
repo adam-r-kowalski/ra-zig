@@ -88,6 +88,18 @@ fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opRegRelQuadWord(context: Context, op: Instruction, to: Register, quad_word: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .RelativeQuadWord;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = @enumToInt(to);
+    operands[1] = quad_word;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opReg(context: Context, op: Instruction, reg: Register) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 1);
@@ -239,7 +251,10 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     try ensureRegisterAvailable(context, .Rax);
     const eight = try intern(context.interned_strings, "8");
     try opRegLiteral(context, .Sub, .Rsp, eight);
-    try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+    const argument = call.argument_entities[0];
+    const value = context.overload.entities.values.get(argument).?;
+    try context.x86.quad_words.insert(value);
+    try opRegRelQuadWord(context, .Movsd, .Xmm0, value);
     try preserveCallerSaveRegisters(context);
     const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
@@ -336,6 +351,7 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings
         .types = Map(Entity, Entity).init(&arena.allocator),
         .externs = Set(InternedString).init(&arena.allocator),
         .bytes = Set(InternedString).init(&arena.allocator),
+        .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
     try main(&x86, ir, interned_strings);
@@ -353,6 +369,7 @@ fn writeLabel(output: *List(u8), label: Label) !void {
 fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
     switch (instruction) {
         .Mov => try output.insertSlice("mov"),
+        .Movsd => try output.insertSlice("movsd"),
         .Push => try output.insertSlice("push"),
         .Pop => try output.insertSlice("pop"),
         .Add => try output.insertSlice("add"),
@@ -384,6 +401,14 @@ fn writeRegister(output: *List(u8), register: Register) !void {
         Register.R13 => try output.insertSlice("r13"),
         Register.R14 => try output.insertSlice("r14"),
         Register.R15 => try output.insertSlice("r15"),
+        Register.Xmm0 => try output.insertSlice("xmm0"),
+        Register.Xmm1 => try output.insertSlice("xmm1"),
+        Register.Xmm2 => try output.insertSlice("xmm2"),
+        Register.Xmm3 => try output.insertSlice("xmm3"),
+        Register.Xmm4 => try output.insertSlice("xmm4"),
+        Register.Xmm5 => try output.insertSlice("xmm5"),
+        Register.Xmm6 => try output.insertSlice("xmm6"),
+        Register.Xmm7 => try output.insertSlice("xmm7"),
     }
 }
 
@@ -397,17 +422,18 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
         try output.insertSlice(interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
-    if (x86.bytes.count() != 0) {
-        try output.insertSlice(
-            \\
-            \\    section .data
-            \\
-            \\
-        );
+    if ((x86.bytes.count() + x86.quad_words.count()) > 0) {
+        try output.insertSlice("\n    section .data\n\n");
     }
     var byte_iterator = x86.bytes.iterator();
     while (byte_iterator.next()) |entry| {
         try output.insertFormatted("byte{}: db ", .{entry.key});
+        try output.insertSlice(interned_strings.data.items[entry.key]);
+        _ = try output.insert('\n');
+    }
+    var quad_word_iterator = x86.quad_words.iterator();
+    while (quad_word_iterator.next()) |entry| {
+        try output.insertFormatted("quad_word{}: dq ", .{entry.key});
         try output.insertSlice(interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
@@ -435,6 +461,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
                     .Label => try writeLabel(&output, operands[k]),
                     .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
                     .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
+                    .RelativeQuadWord => try output.insertFormatted("[rel quad_word{}]", .{operands[k]}),
                 }
             }
         }
