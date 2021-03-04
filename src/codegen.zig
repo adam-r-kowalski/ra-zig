@@ -21,6 +21,7 @@ const Kind = data.x86.Kind;
 const Register = data.x86.Register;
 const List = data.List;
 const Map = data.Map;
+const Set = data.Set;
 const Label = usize;
 const Immediate = usize;
 const RegisterMap = @import("register_map.zig").RegisterMap;
@@ -72,6 +73,18 @@ fn opRegLiteral(context: Context, op: Instruction, to: Register, lit: InternedSt
     const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(to);
     operands[1] = lit;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
+fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .Byte;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = @enumToInt(to);
+    operands[1] = byte;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -210,9 +223,29 @@ fn codegenPrintI64(context: Context, call: Call) !void {
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
     try preserveCallerSaveRegisters(context);
-    const format_string = try intern(context.interned_strings, "format_string");
-    try opRegLiteral(context, .Mov, .Rdi, format_string);
+    const format_string = try intern(context.interned_strings, "\"%ld\", 10, 0");
+    try context.x86.bytes.insert(format_string);
+    try opRegByte(context, .Mov, .Rdi, format_string);
     const printf = try intern(context.interned_strings, "_printf");
+    try context.x86.externs.insert(printf);
+    try opLiteral(context, .Call, printf);
+    try opRegLiteral(context, .Add, .Rsp, eight);
+    try context.register_map.entity_to_register.put(call.result_entity, .Rax);
+    context.register_map.register_to_entity[@enumToInt(Register.Rax)] = call.result_entity;
+}
+
+fn codegenPrintF64(context: Context, call: Call) !void {
+    try ensureRegisterAvailable(context, .Rdi);
+    try ensureRegisterAvailable(context, .Rax);
+    const eight = try intern(context.interned_strings, "8");
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+    try preserveCallerSaveRegisters(context);
+    const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
+    try context.x86.bytes.insert(format_string);
+    try opRegByte(context, .Mov, .Rdi, format_string);
+    const printf = try intern(context.interned_strings, "_printf");
+    try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
     try opRegLiteral(context, .Add, .Rsp, eight);
     try context.register_map.entity_to_register.put(call.result_entity, .Rax);
@@ -230,12 +263,14 @@ fn codegenPrint(context: Context, call: Call) !void {
                 try context.x86.types.putNoClobber(argument, @enumToInt(Builtins.I64));
                 try codegenPrintI64(context, call);
             },
-            .Float => try context.x86.types.putNoClobber(argument, @enumToInt(Builtins.F64)),
+            .Float => {
+                try context.x86.types.putNoClobber(argument, @enumToInt(Builtins.F64));
+                try codegenPrintF64(context, call);
+            },
         }
     } else {
         unreachable;
     }
-    context.x86.uses_print = true;
 }
 
 fn codegenCall(context: Context, i: usize) !void {
@@ -299,8 +334,9 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings
     var x86 = X86{
         .arena = arena,
         .types = Map(Entity, Entity).init(&arena.allocator),
+        .externs = Set(InternedString).init(&arena.allocator),
+        .bytes = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
-        .uses_print = false,
     };
     try main(&x86, ir, interned_strings);
     return x86;
@@ -355,15 +391,25 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
     var output = List(u8).init(allocator);
     errdefer output.deinit();
     try output.insertSlice("    global _main\n");
-    if (x86.uses_print) {
+    var extern_iterator = x86.externs.iterator();
+    while (extern_iterator.next()) |entry| {
+        try output.insertSlice("    extern ");
+        try output.insertSlice(interned_strings.data.items[entry.key]);
+        _ = try output.insert('\n');
+    }
+    if (x86.bytes.count() != 0) {
         try output.insertSlice(
-            \\    extern _printf
             \\
             \\    section .data
             \\
-            \\format_string: db "%ld", 10, 0
             \\
         );
+    }
+    var byte_iterator = x86.bytes.iterator();
+    while (byte_iterator.next()) |entry| {
+        try output.insertFormatted("byte{}: db ", .{entry.key});
+        try output.insertSlice(interned_strings.data.items[entry.key]);
+        _ = try output.insert('\n');
     }
     try output.insertSlice(
         \\
@@ -388,6 +434,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
                     .Register => try writeRegister(&output, @intToEnum(Register, operands[k])),
                     .Label => try writeLabel(&output, operands[k]),
                     .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
+                    .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
                 }
             }
         }

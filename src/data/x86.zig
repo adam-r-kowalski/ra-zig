@@ -2,6 +2,7 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const List = @import("list.zig").List;
 const Map = @import("map.zig").Map;
+const Set = @import("set.zig").Set;
 const InternedString = @import("interned_strings.zig").InternedString;
 const Entity = @import("ir.zig").Entity;
 
@@ -43,6 +44,7 @@ pub const Kind = enum(u8) {
     Register,
     Label,
     Literal,
+    Byte,
 };
 
 pub const Block = struct {
@@ -54,8 +56,9 @@ pub const Block = struct {
 pub const X86 = struct {
     blocks: List(Block),
     types: Map(Entity, Entity),
+    externs: Set(InternedString),
+    bytes: Set(InternedString),
     arena: *Arena,
-    uses_print: bool,
 
     pub fn deinit(self: *@This()) void {
         self.arena.deinit();

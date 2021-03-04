@@ -350,7 +350,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10, 0
+        \\byte17: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -358,7 +358,7 @@ test "print a signed integer" {
         \\    sub rsp, 8
         \\    mov rsi, 12345
         \\    mov rbx, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte17
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax
@@ -397,7 +397,7 @@ test "print three signed integer" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%ld", 10, 0
+        \\byte21: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -405,21 +405,21 @@ test "print three signed integer" {
         \\    sub rsp, 8
         \\    mov rsi, 10
         \\    mov rbx, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
         \\    mov r12, rax
         \\    sub rsp, 8
         \\    mov rsi, 20
         \\    mov r13, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
         \\    mov r14, rax
         \\    sub rsp, 8
         \\    mov rsi, 30
         \\    mov r15, rsi
-        \\    mov rdi, format_string
+        \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax
@@ -432,12 +432,7 @@ test "print a signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 12.345)
-        \\  (print a))
-    ;
+    const source = "(fn main :args () :ret i64 :body (print 12.345))";
     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
     defer interned_strings.deinit();
     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
@@ -454,7 +449,7 @@ test "print a signed float" {
         \\
         \\    section .data
         \\
-        \\format_string: db "%f", 10, 0
+        \\byte16: db "%f", 10, 0
         \\float0: dq 12.345
         \\
         \\    section .text
