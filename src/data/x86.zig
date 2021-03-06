@@ -6,12 +6,43 @@ const Set = @import("set.zig").Set;
 const InternedString = @import("interned_strings.zig").InternedString;
 const Entity = @import("ir.zig").Entity;
 
+pub const Register = enum(usize) {
+    Rax, Rbx, Rcx, Rdx, Rsi, Rdi, R8, R9, R10, R11, R12, R13, R14, R15, Rbp, Rsp,
+    //
+    Xmm0, Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6, Xmm7
+};
+
+pub const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8, .R9, .R10, .R11 };
+pub const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };
+pub const total_available_registers = callee_saved_registers.len + caller_saved_registers.len;
+
+pub const RegisterType = enum { CalleeSaved, CallerSaved };
+
+pub const register_type = blk: {
+    var array: [total_available_registers]RegisterType = undefined;
+    for (callee_saved_registers) |register|
+        array[@enumToInt(register)] = .CalleeSaved;
+    for (caller_saved_registers) |register|
+        array[@enumToInt(register)] = .CallerSaved;
+    break :blk array;
+};
+
+pub const RegisterMap = struct {
+    entity_to_register: Map(Entity, Register),
+    register_to_entity: [total_available_registers]?Entity,
+    free_callee_saved_registers: [callee_saved_registers.len]Register,
+    free_caller_saved_registers: [caller_saved_registers.len]Register,
+    free_callee_saved_length: u8,
+    free_caller_saved_length: u8,
+};
+
 pub const Instruction = enum(u8) {
     Mov,
     Movsd,
     Push,
     Pop,
     Add,
+    Addsd,
     Sub,
     Imul,
     Idiv,
@@ -19,12 +50,6 @@ pub const Instruction = enum(u8) {
     Syscall,
     Cqo,
     Ret,
-};
-
-pub const Register = enum(usize) {
-    Rax, Rbx, Rcx, Rdx, Rsi, Rdi, R8, R9, R10, R11, R12, R13, R14, R15, Rbp, Rsp,
-    //
-    Xmm0, Xmm1, Xmm2, Xmm3, Xmm4, Xmm5, Xmm6, Xmm7
 };
 
 pub const Kind = enum(u8) {
