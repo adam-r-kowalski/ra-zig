@@ -61,6 +61,13 @@ pub fn popFreeRegister(register_map: *RegisterMap) ?Register {
     return null;
 }
 
+pub fn pushFreeSseRegister(sse_register_map: *SseRegisterMap, register: SseRegister) void {
+    const n = sse_register_map.free_registers.len;
+    assert(sse_register_map.length < n);
+    sse_register_map.length += 1;
+    sse_register_map.free_registers[n - sse_register_map.length] = register;
+}
+
 pub fn popFreeSseRegister(sse_register_map: *SseRegisterMap) ?SseRegister {
     assert(sse_register_map.length > 0);
     const index = sse_register_map.free_registers.len - sse_register_map.length;
@@ -230,6 +237,36 @@ fn moveEntityToSpecificRegister(context: Context, entity: Entity, register: Regi
     context.register_map.register_to_entity[@enumToInt(register)] = entity;
 }
 
+fn moveEntityToSpecificSseRegister(context: Context, entity: Entity, register: SseRegister) !void {
+    if (context.sse_register_map.register_to_entity[@enumToInt(register)]) |entity_in_register| {
+        if (entity_in_register == entity) return;
+        const free_register = popFreeSseRegister(context.sse_register_map).?;
+        try opSseRegSseReg(context, .Movsd, free_register, register);
+        try context.sse_register_map.entity_to_register.put(entity_in_register, free_register);
+        context.register_map.register_to_entity[@enumToInt(free_register)] = entity_in_register;
+    } else {
+        const length = context.sse_register_map.length - 1;
+        for (context.sse_register_map.free_registers[0..length]) |current_register, i| {
+            if (current_register == register) {
+                context.sse_register_map.free_registers[i] = context.sse_register_map.free_registers[length];
+                context.sse_register_map.free_registers[length] = register;
+            }
+        }
+        context.sse_register_map.length = length;
+    }
+    if (context.sse_register_map.entity_to_register.get(entity)) |current_register| {
+        if (current_register == register) return;
+        try opSseRegSseReg(context, .Movsd, register, current_register);
+        pushFreeSseRegister(context.sse_register_map, current_register);
+    } else {
+        const value = context.overload.entities.values.get(entity).?;
+        try context.x86.quad_words.insert(value);
+        try opSseRegRelQuadWord(context, .Movsd, register, value);
+    }
+    try context.sse_register_map.entity_to_register.put(entity, register);
+    context.sse_register_map.register_to_entity[@enumToInt(register)] = entity;
+}
+
 fn preserveCallerSaveRegisters(context: Context) !void {
     for (data.x86.caller_saved_registers) |register| {
         if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
@@ -302,9 +339,7 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     const eight = try intern(context.interned_strings, "8");
     try opRegLiteral(context, .Sub, .Rsp, eight);
     const argument = call.argument_entities[0];
-    const value = context.overload.entities.values.get(argument).?;
-    try context.x86.quad_words.insert(value);
-    try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
+    try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
     try preserveCallerSaveRegisters(context);
     const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);

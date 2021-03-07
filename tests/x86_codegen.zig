@@ -863,17 +863,17 @@ test "print signed float after addition" {
         \\
         \\    section .data
         \\
-        \\byte20: db "%ld", 10, 0
+        \\byte20: db "%f", 10, 0
+        \\quad_word15: dq 10.4
+        \\quad_word17: dq 20.5
         \\
         \\    section .text
         \\
         \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 20
-        \\    add rbx, r12
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
         \\    sub rsp, 8
-        \\    mov rsi, rbx
-        \\    mov rbx, rsi
         \\    mov rdi, byte20
         \\    call _printf
         \\    add rsp, 8
