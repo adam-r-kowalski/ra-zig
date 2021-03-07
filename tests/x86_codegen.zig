@@ -9,7 +9,6 @@ const lower = lang.lower;
 const Map = lang.data.Map;
 const Entity = lang.data.ir.Entity;
 
-
 test "prefer callee saved registers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
@@ -474,6 +473,178 @@ test "denominator of division cannot be rdx" {
     );
 }
 
+test "add two signed floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const x 10.3)
+        \\  (const y 30.5)
+        \\  (const z (+ x y))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word15: dq 10.3
+        \\quad_word17: dq 30.5
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "add two signed floats left is comptime int" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const x 10)
+        \\  (const y 30.5)
+        \\  (const z (+ x y))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word15: dq 10
+        \\quad_word17: dq 30.5
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "add two signed floats right is comptime int" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const x 30.5)
+        \\  (const y 10)
+        \\  (const z (+ x y))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word15: dq 30.5
+        \\quad_word17: dq 10
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "add three signed floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.3)
+        \\  (const b 30.5)
+        \\  (const c (+ a b))
+        \\  (const d (+ c 40.2))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word20: dq 40.2
+        \\quad_word15: dq 10.3
+        \\quad_word17: dq 30.5
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
+        \\    movsd xmm2, [rel quad_word20]
+        \\    addsd xmm0, xmm2
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
 test "print a signed integer" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
@@ -578,6 +749,54 @@ test "print three signed integer" {
     );
 }
 
+test "print signed integer after addition" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10)
+        \\  (const b 20)
+        \\  (const c (+ a b))
+        \\  (print c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte20: db "%ld", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbx, 10
+        \\    mov r12, 20
+        \\    add rbx, r12
+        \\    sub rsp, 8
+        \\    mov rsi, rbx
+        \\    mov rbx, rsi
+        \\    mov rdi, byte20
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov rdi, rax
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
 test "print a signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
@@ -616,44 +835,50 @@ test "print a signed float" {
     );
 }
 
-// test "add two signed floats" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn main :args () :ret i64
-//         \\  :body
-//         \\  (const x 10.3)
-//         \\  (const y 30.5)
-//         \\  (const z (+ x y))
-//         \\  0)
-//     ;
-//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-//     defer interned_strings.deinit();
-//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-//     defer ast.deinit();
-//     var ir = try lang.lower(&gpa.allocator, ast);
-//     defer ir.deinit();
-//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
-//     defer x86.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
-//     defer x86_string.deinit();
-//     std.testing.expectEqualStrings(x86_string.slice(),
-//         \\    global _main
-//         \\
-//         \\    section .data
-//         \\
-//         \\quad_word14: dq 10.3
-//         \\quad_word15: dq 30.5
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    movsd xmm0, [rel quad_word14]
-//         \\    movsd xmm1, [rel quad_word14]
-//         \\    addsd xmm0, xmm1
-//         \\    mov rdi, 0
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     );
-// }
+test "print signed float after addition" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.4)
+        \\  (const b 20.5)
+        \\  (const c (+ a b))
+        \\  (print c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte20: db "%ld", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbx, 10
+        \\    mov r12, 20
+        \\    add rbx, r12
+        \\    sub rsp, 8
+        \\    mov rsi, rbx
+        \\    mov rbx, rsi
+        \\    mov rdi, byte20
+        \\    call _printf
+        \\    add rsp, 8
+        \\    mov rdi, rax
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
