@@ -14,7 +14,9 @@ pub const Scopes = enum(usize) {
 pub const Builtins = enum(usize) {
     If,
     Const,
+    Int,
     I64,
+    Float,
     F64,
 };
 
