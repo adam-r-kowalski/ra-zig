@@ -27,6 +27,10 @@ const Label = usize;
 const Immediate = usize;
 const RegisterMap = data.x86.RegisterMap;
 const SseRegisterMap = data.x86.SseRegisterMap;
+const Int = @enumToInt(Builtins.Int);
+const I64 = @enumToInt(Builtins.I64);
+const Float = @enumToInt(Builtins.Float);
+const F64 = @enumToInt(Builtins.F64);
 
 pub fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
     switch (data.x86.register_type[@enumToInt(register)]) {
@@ -293,28 +297,6 @@ fn ensureRegisterAvailable(context: Context, register: Register) !void {
     }
 }
 
-fn codegenDivide(context: Context, call: Call) !void {
-    assert(call.argument_entities.len == 2);
-    const lhs_entity = call.argument_entities[0];
-    const lhs_register = Register.Rax;
-    try moveEntityToSpecificRegister(context, lhs_entity, lhs_register);
-    const rhs_entity = call.argument_entities[1];
-    var rhs_register = try moveEntityToRegister(context, rhs_entity);
-    if (context.register_map.register_to_entity[@enumToInt(Register.Rdx)]) |entity| {
-        const register = popFreeRegister(context.register_map).?;
-        try opRegReg(context, .Mov, register, .Rdx);
-        context.register_map.register_to_entity[@enumToInt(register)] = entity;
-        try context.register_map.entity_to_register.put(entity, register);
-        if (entity == rhs_entity) rhs_register = register;
-    }
-    try opNoArgs(context.x86_block, .Cqo);
-    try opReg(context, .Idiv, rhs_register);
-    try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
-    context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
-    context.register_map.entity_to_register.removeAssertDiscard(rhs_entity);
-    try context.x86.types.putNoClobber(call.result_entity, @enumToInt(Builtins.I64));
-}
-
 fn codegenPrintI64(context: Context, call: Call) !void {
     try ensureRegisterAvailable(context, .Rdi);
     try ensureRegisterAvailable(context, .Rax);
@@ -370,8 +352,8 @@ fn codegenPrint(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 1);
     const argument = call.argument_entities[0];
     switch (try typeOf(context, argument)) {
-        @enumToInt(Builtins.Int), @enumToInt(Builtins.I64) => try codegenPrintI64(context, call),
-        @enumToInt(Builtins.Float), @enumToInt(Builtins.F64) => try codegenPrintF64(context, call),
+        Int, I64 => try codegenPrintI64(context, call),
+        Float, F64 => try codegenPrintF64(context, call),
         else => unreachable,
     }
 }
@@ -382,8 +364,8 @@ const BinaryOps = struct {
 };
 
 const AddOps = BinaryOps{ .int = .Add, .float = .Addsd };
-const SubOps = BinaryOps{ .int = .Sub, .float = .Sub };
-const MulOps = BinaryOps{ .int = .Imul, .float = .Imul };
+const SubOps = BinaryOps{ .int = .Sub, .float = .Subsd };
+const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
 fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
     const lhs_register = try moveEntityToRegister(context, lhs);
@@ -392,7 +374,7 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
     try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
     context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
     context.register_map.entity_to_register.removeAssertDiscard(rhs);
-    try context.x86.types.putNoClobber(call.result_entity, @enumToInt(Builtins.I64));
+    try context.x86.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
@@ -402,17 +384,13 @@ fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs:
     try context.sse_register_map.entity_to_register.put(call.result_entity, lhs_register);
     context.sse_register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
     context.sse_register_map.entity_to_register.removeAssertDiscard(rhs);
-    try context.x86.types.putNoClobber(call.result_entity, @enumToInt(Builtins.F64));
+    try context.x86.types.putNoClobber(call.result_entity, F64);
 }
 
 fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
     assert(call.argument_entities.len == 2);
     const lhs = call.argument_entities[0];
     const rhs = call.argument_entities[1];
-    const Int = @enumToInt(Builtins.Int);
-    const I64 = @enumToInt(Builtins.I64);
-    const Float = @enumToInt(Builtins.Float);
-    const F64 = @enumToInt(Builtins.F64);
     switch (try typeOf(context, lhs)) {
         Int => switch (try typeOf(context, rhs)) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
@@ -425,6 +403,47 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
         },
         Float, F64 => switch (try typeOf(context, rhs)) {
             Int, Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
+            else => unreachable,
+        },
+        else => unreachable,
+    }
+}
+
+fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
+    const lhs_register = Register.Rax;
+    try moveEntityToSpecificRegister(context, lhs, lhs_register);
+    var rhs_register = try moveEntityToRegister(context, rhs);
+    if (context.register_map.register_to_entity[@enumToInt(Register.Rdx)]) |entity| {
+        const register = popFreeRegister(context.register_map).?;
+        try opRegReg(context, .Mov, register, .Rdx);
+        context.register_map.register_to_entity[@enumToInt(register)] = entity;
+        try context.register_map.entity_to_register.put(entity, register);
+        if (entity == rhs) rhs_register = register;
+    }
+    try opNoArgs(context.x86_block, .Cqo);
+    try opReg(context, .Idiv, rhs_register);
+    try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
+    context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
+    context.register_map.entity_to_register.removeAssertDiscard(rhs);
+    try context.x86.types.putNoClobber(call.result_entity, I64);
+}
+
+fn codegenDivide(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs = call.argument_entities[0];
+    const rhs = call.argument_entities[1];
+    switch (try typeOf(context, lhs)) {
+        Int => switch (try typeOf(context, rhs)) {
+            Int, I64 => try codegenDivideIntInt(context, call, lhs, rhs),
+            Float, F64 => try codegenBinaryOpFloatFloat(context, call, .Divsd, lhs, rhs),
+            else => unreachable,
+        },
+        I64 => switch (try typeOf(context, rhs)) {
+            Int, I64 => try codegenDivideIntInt(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        Float, F64 => switch (try typeOf(context, rhs)) {
+            Int, Float, F64 => try codegenBinaryOpFloatFloat(context, call, .Divsd, lhs, rhs),
             else => unreachable,
         },
         else => unreachable,
@@ -536,8 +555,11 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Add => try output.insertSlice("add"),
         .Addsd => try output.insertSlice("addsd"),
         .Sub => try output.insertSlice("sub"),
+        .Subsd => try output.insertSlice("subsd"),
         .Imul => try output.insertSlice("imul"),
+        .Mulsd => try output.insertSlice("mulsd"),
         .Idiv => try output.insertSlice("idiv"),
+        .Divsd => try output.insertSlice("divsd"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
         .Cqo => try output.insertSlice("cqo"),

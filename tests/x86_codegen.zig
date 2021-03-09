@@ -506,9 +506,9 @@ test "add two signed floats" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm0, [rel quad_word15]
-        \\    movsd xmm1, [rel quad_word17]
-        \\    addsd xmm0, xmm1
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    addsd xmm15, xmm14
         \\    mov rdi, 0
         \\    mov rax, 0x02000001
         \\    syscall
@@ -548,9 +548,9 @@ test "add two signed floats left is comptime int" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm0, [rel quad_word15]
-        \\    movsd xmm1, [rel quad_word17]
-        \\    addsd xmm0, xmm1
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    addsd xmm15, xmm14
         \\    mov rdi, 0
         \\    mov rax, 0x02000001
         \\    syscall
@@ -590,9 +590,9 @@ test "add two signed floats right is comptime int" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm0, [rel quad_word15]
-        \\    movsd xmm1, [rel quad_word17]
-        \\    addsd xmm0, xmm1
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    addsd xmm15, xmm14
         \\    mov rdi, 0
         \\    mov rax, 0x02000001
         \\    syscall
@@ -634,11 +634,149 @@ test "add three signed floats" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm0, [rel quad_word15]
-        \\    movsd xmm1, [rel quad_word17]
-        \\    addsd xmm0, xmm1
-        \\    movsd xmm2, [rel quad_word20]
-        \\    addsd xmm0, xmm2
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    addsd xmm15, xmm14
+        \\    movsd xmm13, [rel quad_word20]
+        \\    addsd xmm15, xmm13
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "subtract three signed floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.3)
+        \\  (const b 15.4)
+        \\  (const c (- a b))
+        \\  (const d (- c 5.3))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word20: dq 5.3
+        \\quad_word15: dq 10.3
+        \\quad_word17: dq 15.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    subsd xmm15, xmm14
+        \\    movsd xmm13, [rel quad_word20]
+        \\    subsd xmm15, xmm13
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "multiply three signed floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.3)
+        \\  (const b 15.4)
+        \\  (const c (* a b))
+        \\  (const d (* c 5.3))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word20: dq 5.3
+        \\quad_word15: dq 10.3
+        \\quad_word17: dq 15.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    mulsd xmm15, xmm14
+        \\    movsd xmm13, [rel quad_word20]
+        \\    mulsd xmm15, xmm13
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "divide three signed floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.3)
+        \\  (const b 15.4)
+        \\  (const c (/ a b))
+        \\  (const d (/ c 5.3))
+        \\  0)
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word20: dq 5.3
+        \\quad_word15: dq 10.3
+        \\quad_word17: dq 15.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    divsd xmm15, xmm14
+        \\    movsd xmm13, [rel quad_word20]
+        \\    divsd xmm15, xmm13
         \\    mov rdi, 0
         \\    mov rax, 0x02000001
         \\    syscall
@@ -870,10 +1008,11 @@ test "print signed float after addition" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm0, [rel quad_word15]
-        \\    movsd xmm1, [rel quad_word17]
-        \\    addsd xmm0, xmm1
+        \\    movsd xmm15, [rel quad_word15]
+        \\    movsd xmm14, [rel quad_word17]
+        \\    addsd xmm15, xmm14
         \\    sub rsp, 8
+        \\    movsd xmm0, xmm15
         \\    mov rdi, byte20
         \\    call _printf
         \\    add rsp, 8

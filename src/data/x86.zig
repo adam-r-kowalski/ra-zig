@@ -48,8 +48,8 @@ pub const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R
 pub const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };
 pub const total_available_registers = callee_saved_registers.len + caller_saved_registers.len;
 pub const sse_registers = [16]SseRegister{
-    .Xmm0, .Xmm1, .Xmm2,  .Xmm3,  .Xmm4,  .Xmm5,  .Xmm6,  .Xmm7,
-    .Xmm8, .Xmm9, .Xmm10, .Xmm11, .Xmm12, .Xmm13, .Xmm14, .Xmm15,
+    .Xmm15, .Xmm14, .Xmm13, .Xmm12, .Xmm11, .Xmm10, .Xmm9, .Xmm8,
+    .Xmm7,  .Xmm6,  .Xmm5,  .Xmm4,  .Xmm3,  .Xmm2,  .Xmm1, .Xmm0,
 };
 
 pub const RegisterType = enum { CalleeSaved, CallerSaved };
@@ -87,8 +87,11 @@ pub const Instruction = enum(u8) {
     Add,
     Addsd,
     Sub,
+    Subsd,
     Imul,
+    Mulsd,
     Idiv,
+    Divsd,
     Call,
     Syscall,
     Cqo,
