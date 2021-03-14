@@ -9,7 +9,7 @@ const lower = lang.lower;
 const Map = lang.data.Map;
 const Entity = lang.data.ir.Entity;
 
-test "prefer callee saved registers" {
+test "prefer caller saved registers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const allocator = &gpa.allocator;
@@ -29,8 +29,8 @@ test "prefer callee saved registers" {
     while (i < n) : (i += 1)
         registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
     expectEqual(registers, .{
-        .Rbx, .R12, .R13, .R14, .R15, .Rax, .Rcx,
-        .Rdx, .Rsi, .Rdi, .R8,  .R9,  .R10, .R11,
+        .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8,  .R9,
+        .R10, .R11, .Rbx, .R12, .R13, .R14, .R15,
     });
     expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
 }
@@ -155,151 +155,94 @@ test "if caller saved and callee saved registers are available prefer callee sav
     }
 }
 
-test "add two signed integers" {
+test "binary op between two signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10)
-        \\  (const y 15)
-        \\  (+ x y))
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 15
-        \\    add rbx, r12
-        \\    mov rdi, rbx
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*" };
+    const instructions = [_][]const u8{ "add", "sub", "imul" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const x 10)
+            \\  (const y 15)
+            \\  ({s} x y))
+        , .{op});
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    mov rax, 10
+            \\    mov rcx, 15
+            \\    {s} rax, rcx
+            \\    mov rdi, rax
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{instructions[i]});
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
-test "add three signed integers" {
+test "binary op between three signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10)
-        \\  (const y 20)
-        \\  (const z 30)
-        \\  (+ (+ x y) z))
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 20
-        \\    add rbx, r12
-        \\    mov r13, 30
-        \\    add rbx, r13
-        \\    mov rdi, rbx
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "subtract two signed integers" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10)
-        \\  (const y 15)
-        \\  (- x y))
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 15
-        \\    sub rbx, r12
-        \\    mov rdi, rbx
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "multiply two signed integers" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10)
-        \\  (const y 15)
-        \\  (* x y))
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 15
-        \\    imul rbx, r12
-        \\    mov rdi, rbx
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*" };
+    const instructions = [_][]const u8{ "add", "sub", "imul" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const a 10)
+            \\  (const b 15)
+            \\  (const c ({s} a b))
+            \\  (const d 20)
+            \\  ({s} c d))
+        , .{ op, op });
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    mov rax, 10
+            \\    mov rcx, 15
+            \\    {s} rax, rcx
+            \\    mov rdx, 20
+            \\    {s} rax, rdx
+            \\    mov rdi, rax
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{ instructions[i], instructions[i] });
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
 test "divide two signed integers" {
@@ -330,9 +273,9 @@ test "divide two signed integers" {
         \\
         \\_main:
         \\    mov rax, 20
-        \\    mov rbx, 4
+        \\    mov rcx, 4
         \\    cqo
-        \\    idiv rbx
+        \\    idiv rcx
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
@@ -368,12 +311,14 @@ test "divide two signed integers where lhs is not in rax" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rbx, 2
-        \\    mov r12, 3
-        \\    add rbx, r12
+        \\    mov rax, 2
+        \\    mov rcx, 3
+        \\    add rax, rcx
+        \\    mov rdx, rax
         \\    mov rax, 30
+        \\    mov rsi, rdx
         \\    cqo
-        \\    idiv rbx
+        \\    idiv rsi
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
@@ -410,17 +355,17 @@ test "binary operators on signed integers" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 7
-        \\    sub rbx, r12
-        \\    mov r13, 3
-        \\    imul rbx, r13
-        \\    mov r14, 15
-        \\    add rbx, r14
-        \\    mov rax, rbx
-        \\    mov rbx, 2
+        \\    mov rax, 10
+        \\    mov rcx, 7
+        \\    sub rax, rcx
+        \\    mov rdx, 3
+        \\    imul rax, rdx
+        \\    mov rsi, 15
+        \\    add rax, rsi
+        \\    mov rdi, 2
+        \\    mov r8, rdx
         \\    cqo
-        \\    idiv rbx
+        \\    idiv rdi
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
@@ -438,9 +383,9 @@ test "denominator of division cannot be rdx" {
         \\  (const b 3)
         \\  (const c (+ a b))
         \\  (const d 10)
-        \\  (const e (* c d))
+        \\  (const e (* d c))
         \\  (const f 5)
-        \\  (/ e f))
+        \\  (/ f e))
     ;
     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
     defer interned_strings.deinit();
@@ -458,15 +403,16 @@ test "denominator of division cannot be rdx" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rbx, 2
-        \\    mov r12, 3
-        \\    add rbx, r12
-        \\    mov r13, 10
-        \\    imul rbx, r13
-        \\    mov rax, rbx
-        \\    mov rbx, 5
+        \\    mov rax, 2
+        \\    mov rcx, 3
+        \\    add rax, rcx
+        \\    mov rdx, 10
+        \\    imul rdx, rax
+        \\    mov rsi, rax
+        \\    mov rax, 5
+        \\    mov rdi, rdx
         \\    cqo
-        \\    idiv rbx
+        \\    idiv rdi
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall

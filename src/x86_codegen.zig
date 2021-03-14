@@ -50,16 +50,16 @@ pub fn pushFreeRegister(register_map: *RegisterMap, register: Register) void {
 }
 
 pub fn popFreeRegister(register_map: *RegisterMap) ?Register {
-    if (register_map.free_callee_saved_length > 0) {
-        const index = register_map.free_callee_saved_registers.len - register_map.free_callee_saved_length;
-        const register = register_map.free_callee_saved_registers[index];
-        register_map.free_callee_saved_length -= 1;
-        return register;
-    }
     if (register_map.free_caller_saved_length > 0) {
         const index = register_map.free_caller_saved_registers.len - register_map.free_caller_saved_length;
         const register = register_map.free_caller_saved_registers[index];
         register_map.free_caller_saved_length -= 1;
+        return register;
+    }
+    if (register_map.free_callee_saved_length > 0) {
+        const index = register_map.free_callee_saved_registers.len - register_map.free_callee_saved_length;
+        const register = register_map.free_callee_saved_registers[index];
+        register_map.free_callee_saved_length -= 1;
         return register;
     }
     return null;
@@ -371,9 +371,9 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
     const lhs_register = try moveEntityToRegister(context, lhs);
     const rhs_register = try moveEntityToRegister(context, rhs);
     try opRegReg(context, op, lhs_register, rhs_register);
+    context.register_map.entity_to_register.removeAssertDiscard(lhs);
     try context.register_map.entity_to_register.put(call.result_entity, lhs_register);
     context.register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
-    context.register_map.entity_to_register.removeAssertDiscard(rhs);
     try context.x86.types.putNoClobber(call.result_entity, I64);
 }
 
@@ -418,6 +418,7 @@ fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !
         try opRegReg(context, .Mov, register, .Rdx);
         context.register_map.register_to_entity[@enumToInt(register)] = entity;
         try context.register_map.entity_to_register.put(entity, register);
+        context.register_map.register_to_entity[@enumToInt(Register.Rdx)] = null;
         if (entity == rhs) rhs_register = register;
     }
     try opNoArgs(context.x86_block, .Cqo);
