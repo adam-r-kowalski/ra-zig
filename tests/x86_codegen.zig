@@ -132,8 +132,8 @@ test "if caller saved and callee saved registers are available prefer callee sav
         while (i < n) : (i += 1)
             registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
         expectEqual(registers, .{
-            .R15, .R14, .R13, .R12, .Rbx, .R11, .R10,
-            .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+            .R11, .R10, .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+            .R15, .R14, .R13, .R12, .Rbx,
         });
         expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
     }
@@ -148,8 +148,8 @@ test "if caller saved and callee saved registers are available prefer callee sav
         while (i < n) : (i += 1)
             registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
         expectEqual(registers, .{
-            .R15, .R14, .R13, .R12, .Rbx, .R11, .R10,
-            .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+            .R11, .R10, .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
+            .R15, .R14, .R13, .R12, .Rbx,
         });
         expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
     }
@@ -419,314 +419,204 @@ test "denominator of division cannot be rdx" {
     );
 }
 
-test "add two signed floats" {
+test "binary op between two signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10.3)
-        \\  (const y 30.5)
-        \\  (const z (+ x y))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word15: dq 10.3
-        \\quad_word17: dq 30.5
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    addsd xmm15, xmm14
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const x 10.3)
+            \\  (const y 30.5)
+            \\  (const z ({s} x y))
+            \\  0)
+        , .{op});
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .data
+            \\
+            \\quad_word15: dq 10.3
+            \\quad_word17: dq 30.5
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm1, [rel quad_word17]
+            \\    {s} xmm0, xmm1
+            \\    mov rdi, 0
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{instructions[i]});
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
-test "add two signed floats left is comptime int" {
+test "binary op between two signed floats left is comptime int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 10)
-        \\  (const y 30.5)
-        \\  (const z (+ x y))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word15: dq 10
-        \\quad_word17: dq 30.5
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    addsd xmm15, xmm14
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const x 10)
+            \\  (const y 30.5)
+            \\  (const z ({s} x y))
+            \\  0)
+        , .{op});
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .data
+            \\
+            \\quad_word15: dq 10
+            \\quad_word17: dq 30.5
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm1, [rel quad_word17]
+            \\    {s} xmm0, xmm1
+            \\    mov rdi, 0
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{instructions[i]});
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
-test "add two signed floats right is comptime int" {
+test "binary op between two signed floats right is comptime int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const x 30.5)
-        \\  (const y 10)
-        \\  (const z (+ x y))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word15: dq 30.5
-        \\quad_word17: dq 10
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    addsd xmm15, xmm14
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const x 30.5)
+            \\  (const y 10)
+            \\  (const z ({s} x y))
+            \\  0)
+        , .{op});
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .data
+            \\
+            \\quad_word15: dq 30.5
+            \\quad_word17: dq 10
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm1, [rel quad_word17]
+            \\    {s} xmm0, xmm1
+            \\    mov rdi, 0
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{instructions[i]});
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
-test "add three signed floats" {
+test "binary op between three signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 10.3)
-        \\  (const b 30.5)
-        \\  (const c (+ a b))
-        \\  (const d (+ c 40.2))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word20: dq 40.2
-        \\quad_word15: dq 10.3
-        \\quad_word17: dq 30.5
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    addsd xmm15, xmm14
-        \\    movsd xmm13, [rel quad_word20]
-        \\    addsd xmm15, xmm13
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "subtract three signed floats" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 10.3)
-        \\  (const b 15.4)
-        \\  (const c (- a b))
-        \\  (const d (- c 5.3))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word20: dq 5.3
-        \\quad_word15: dq 10.3
-        \\quad_word17: dq 15.4
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    subsd xmm15, xmm14
-        \\    movsd xmm13, [rel quad_word20]
-        \\    subsd xmm15, xmm13
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "multiply three signed floats" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 10.3)
-        \\  (const b 15.4)
-        \\  (const c (* a b))
-        \\  (const d (* c 5.3))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word20: dq 5.3
-        \\quad_word15: dq 10.3
-        \\quad_word17: dq 15.4
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    mulsd xmm15, xmm14
-        \\    movsd xmm13, [rel quad_word20]
-        \\    mulsd xmm15, xmm13
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "divide three signed floats" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 10.3)
-        \\  (const b 15.4)
-        \\  (const c (/ a b))
-        \\  (const d (/ c 5.3))
-        \\  0)
-    ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\
-        \\    section .data
-        \\
-        \\quad_word20: dq 5.3
-        \\quad_word15: dq 10.3
-        \\quad_word17: dq 15.4
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    divsd xmm15, xmm14
-        \\    movsd xmm13, [rel quad_word20]
-        \\    divsd xmm15, xmm13
-        \\    mov rdi, 0
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
+    for (ops) |op, i| {
+        const source = try std.fmt.allocPrint(allocator,
+            \\(fn main :args () :ret i64
+            \\  :body
+            \\  (const a 10.3)
+            \\  (const b 30.5)
+            \\  (const c ({s} a b))
+            \\  (const d ({s} c 40.2))
+            \\  0)
+        , .{ op, op });
+        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        allocator.free(source);
+        var ir = try lang.lower(&gpa.allocator, ast);
+        ast.deinit();
+        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        ir.deinit();
+        var x86_string = try lang.x86String(allocator, x86, interned_strings);
+        interned_strings.deinit();
+        x86.deinit();
+        const expected = try std.fmt.allocPrint(allocator,
+            \\    global _main
+            \\
+            \\    section .data
+            \\
+            \\quad_word20: dq 40.2
+            \\quad_word15: dq 10.3
+            \\quad_word17: dq 30.5
+            \\
+            \\    section .text
+            \\
+            \\_main:
+            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm1, [rel quad_word17]
+            \\    {s} xmm0, xmm1
+            \\    movsd xmm2, [rel quad_word20]
+            \\    {s} xmm0, xmm2
+            \\    mov rdi, 0
+            \\    mov rax, 0x02000001
+            \\    syscall
+        , .{ instructions[i], instructions[i] });
+        expectEqualStrings(x86_string.slice(), expected);
+        x86_string.deinit();
+        allocator.free(expected);
+    }
 }
 
 test "print a signed integer" {
@@ -762,7 +652,6 @@ test "print a signed integer" {
         \\_main:
         \\    sub rsp, 8
         \\    mov rsi, 12345
-        \\    mov rbx, rsi
         \\    mov rdi, byte17
         \\    call _printf
         \\    add rsp, 8
@@ -809,21 +698,20 @@ test "print three signed integer" {
         \\_main:
         \\    sub rsp, 8
         \\    mov rsi, 10
-        \\    mov rbx, rsi
         \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
-        \\    mov r12, rax
         \\    sub rsp, 8
+        \\    mov rbx, rax
+        \\    mov r12, rsi
         \\    mov rsi, 20
-        \\    mov r13, rsi
         \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
-        \\    mov r14, rax
         \\    sub rsp, 8
+        \\    mov r13, rax
+        \\    mov r14, rsi
         \\    mov rsi, 30
-        \\    mov r15, rsi
         \\    mov rdi, byte21
         \\    call _printf
         \\    add rsp, 8
@@ -866,12 +754,13 @@ test "print signed integer after addition" {
         \\    section .text
         \\
         \\_main:
-        \\    mov rbx, 10
-        \\    mov r12, 20
-        \\    add rbx, r12
+        \\    mov rax, 10
+        \\    mov rcx, 20
+        \\    add rax, rcx
         \\    sub rsp, 8
+        \\    mov rbx, rax
+        \\    mov r12, rcx
         \\    mov rsi, rbx
-        \\    mov rbx, rsi
         \\    mov rdi, byte20
         \\    call _printf
         \\    add rsp, 8
@@ -954,11 +843,10 @@ test "print signed float after addition" {
         \\    section .text
         \\
         \\_main:
-        \\    movsd xmm15, [rel quad_word15]
-        \\    movsd xmm14, [rel quad_word17]
-        \\    addsd xmm15, xmm14
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    addsd xmm0, xmm1
         \\    sub rsp, 8
-        \\    movsd xmm0, xmm15
         \\    mov rdi, byte20
         \\    call _printf
         \\    add rsp, 8
