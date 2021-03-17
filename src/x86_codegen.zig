@@ -306,26 +306,35 @@ fn moveEntityToSpecificSseRegister(context: Context, entity: Entity, register: S
 fn preserveCallerSaveRegisters(context: Context) !void {
     for (data.x86.caller_saved_registers) |register| {
         if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
-            assert(context.register_map.free_callee_saved_length > 0);
-            const index = context.register_map.free_callee_saved_registers.len - context.register_map.free_callee_saved_length;
-            const free_register = context.register_map.free_callee_saved_registers[index];
-            context.register_map.free_callee_saved_length -= 1;
-            try opRegReg(context, .Mov, free_register, register);
-            try context.register_map.entity_to_register.put(entity, free_register);
-            context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
-            context.register_map.register_to_entity[@enumToInt(register)] = null;
+            if (context.register_map.free_callee_saved_length > 0) {
+                const index = context.register_map.free_callee_saved_registers.len - context.register_map.free_callee_saved_length;
+                const free_register = context.register_map.free_callee_saved_registers[index];
+                context.register_map.free_callee_saved_length -= 1;
+                try opRegReg(context, .Mov, free_register, register);
+                try context.register_map.entity_to_register.put(entity, free_register);
+                context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
+                context.register_map.register_to_entity[@enumToInt(register)] = null;
+            } else {
+                try opReg(context, .Push, register);
+                context.register_map.register_to_entity[@enumToInt(register)] = null;
+                context.register_map.entity_to_register.removeAssertDiscard(entity);
+            }
         }
     }
 }
 
-fn ensureRegisterAvailable(context: Context, register: Register) !void {
-    if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
-        const free_register = popFreeRegister(context.register_map).?;
-        try opRegReg(context, .Mov, free_register, register);
-        pushFreeRegister(context.register_map, register);
-        try context.register_map.entity_to_register.put(entity, free_register);
-        context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
-        context.register_map.register_to_entity[@enumToInt(register)] = null;
+fn preserveCallerSaveSseRegisters(context: Context) !void {
+    for (data.x86.caller_saved_sse_registers) |register| {
+        if (context.sse_register_map.register_to_entity[@enumToInt(register)]) |entity| {
+            assert(context.sse_register_map.free_callee_saved_length > 0);
+            const index = context.sse_register_map.free_callee_saved_registers.len - context.sse_register_map.free_callee_saved_length;
+            const free_register = context.sse_register_map.free_callee_saved_registers[index];
+            context.sse_register_map.free_callee_saved_length -= 1;
+            try opSseRegSseReg(context, .Movsd, free_register, register);
+            try context.sse_register_map.entity_to_register.put(entity, free_register);
+            context.sse_register_map.register_to_entity[@enumToInt(free_register)] = entity;
+            context.sse_register_map.register_to_entity[@enumToInt(register)] = null;
+        }
     }
 }
 
@@ -346,13 +355,12 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
-    try ensureRegisterAvailable(context, .Rdi);
-    try ensureRegisterAvailable(context, .Rax);
     const eight = try intern(context.interned_strings, "8");
     try opRegLiteral(context, .Sub, .Rsp, eight);
     const argument = call.argument_entities[0];
-    try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
     try preserveCallerSaveRegisters(context);
+    try preserveCallerSaveSseRegisters(context);
+    try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
     const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);

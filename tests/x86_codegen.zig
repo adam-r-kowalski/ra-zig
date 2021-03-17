@@ -721,6 +721,68 @@ test "print three signed integer" {
     );
 }
 
+// test "print four signed integer" {
+//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//     defer std.testing.expect(!gpa.deinit());
+//     const allocator = &gpa.allocator;
+//     const source =
+//         \\(fn main :args () :ret i64
+//         \\  :body
+//         \\  (const a 10)
+//         \\  (print a)
+//         \\  (const b 20)
+//         \\  (print b)
+//         \\  (const c 30)
+//         \\  (print c)
+//         \\  (const d 30)
+//         \\  (print d))
+//     ;
+//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+//     defer interned_strings.deinit();
+//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+//     defer ast.deinit();
+//     var ir = try lang.lower(&gpa.allocator, ast);
+//     defer ir.deinit();
+//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
+//     defer x86.deinit();
+//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
+//     defer x86_string.deinit();
+//     std.testing.expectEqualStrings(x86_string.slice(),
+//         \\    global _main
+//         \\    extern _printf
+//         \\
+//         \\    section .data
+//         \\
+//         \\byte21: db "%ld", 10, 0
+//         \\
+//         \\    section .text
+//         \\
+//         \\_main:
+//         \\    sub rsp, 8
+//         \\    mov rsi, 10
+//         \\    mov rdi, byte21
+//         \\    call _printf
+//         \\    add rsp, 8
+//         \\    sub rsp, 8
+//         \\    mov rbx, rax
+//         \\    mov r12, rsi
+//         \\    mov rsi, 20
+//         \\    mov rdi, byte21
+//         \\    call _printf
+//         \\    add rsp, 8
+//         \\    sub rsp, 8
+//         \\    mov r13, rax
+//         \\    mov r14, rsi
+//         \\    mov rsi, 30
+//         \\    mov rdi, byte21
+//         \\    call _printf
+//         \\    add rsp, 8
+//         \\    mov rdi, rax
+//         \\    mov rax, 0x02000001
+//         \\    syscall
+//     );
+// }
+
 test "print signed integer after addition" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
@@ -847,6 +909,9 @@ test "print signed float after addition" {
         \\    movsd xmm1, [rel quad_word17]
         \\    addsd xmm0, xmm1
         \\    sub rsp, 8
+        \\    movsd xmm8, xmm0
+        \\    movsd xmm9, xmm1
+        \\    movsd xmm0, xmm8
         \\    mov rdi, byte20
         \\    call _printf
         \\    add rsp, 8
