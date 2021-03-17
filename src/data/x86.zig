@@ -1,95 +1,88 @@
 const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
+const Allocator = std.mem.Allocator;
 const List = @import("list.zig").List;
 const Map = @import("map.zig").Map;
 const Set = @import("set.zig").Set;
 const InternedString = @import("interned_strings.zig").InternedString;
 const Entity = @import("ir.zig").Entity;
 
-pub const Register = enum(usize) {
-    Rax,
-    Rbx,
-    Rcx,
-    Rdx,
-    Rsi,
-    Rdi,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    R13,
-    R14,
-    R15,
-    Rbp,
-    Rsp,
+pub const StorageKind = enum(u8) {
+    Register,
+    Stack,
 };
 
-pub const SseRegister = enum(usize) {
-    Xmm0,
-    Xmm1,
-    Xmm2,
-    Xmm3,
-    Xmm4,
-    Xmm5,
-    Xmm6,
-    Xmm7,
-    Xmm8,
-    Xmm9,
-    Xmm10,
-    Xmm11,
-    Xmm12,
-    Xmm13,
-    Xmm14,
-    Xmm15,
+pub const Storage = struct {
+    kind: StorageKind,
+    value: usize,
 };
 
-pub const caller_saved_registers = [9]Register{ .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8, .R9, .R10, .R11 };
-pub const callee_saved_registers = [5]Register{ .Rbx, .R12, .R13, .R14, .R15 };
-pub const total_available_registers = callee_saved_registers.len + caller_saved_registers.len;
+pub const A = 0;
+pub const C = 1;
+pub const D = 2;
+pub const B = 3;
+pub const SP = 4;
+pub const BP = 5;
+pub const SI = 6;
+pub const DI = 7;
 
-pub const caller_saved_sse_registers = [8]SseRegister{ .Xmm0, .Xmm1, .Xmm2, .Xmm3, .Xmm4, .Xmm5, .Xmm6, .Xmm7 };
-pub const callee_saved_sse_registers = [8]SseRegister{ .Xmm8, .Xmm9, .Xmm10, .Xmm11, .Xmm12, .Xmm13, .Xmm14, .Xmm15 };
-pub const total_available_sse_registers = callee_saved_sse_registers.len + caller_saved_sse_registers.len;
+pub const Register = u8;
 
-pub const RegisterType = enum { CalleeSaved, CallerSaved };
+pub const RegisterKind = enum { CalleeSaved, CallerSaved };
 
-pub const register_type = blk: {
-    var array: [total_available_registers]RegisterType = undefined;
-    for (callee_saved_registers) |register|
-        array[@enumToInt(register)] = .CalleeSaved;
-    for (caller_saved_registers) |register|
-        array[@enumToInt(register)] = .CallerSaved;
-    break :blk array;
+pub fn RegisterStack(comptime n: Register) type {
+    return struct {
+        data: [n]Register,
+        head: Register,
+    };
+}
+
+pub const Registers = struct {
+    stored_entity: [16]?Entity,
+    volatle: RegisterStack(9),
+    stable: RegisterStack(5),
 };
 
-pub const sse_register_type = blk: {
-    var array: [total_available_sse_registers]RegisterType = undefined;
-    for (callee_saved_sse_registers) |register|
-        array[@enumToInt(register)] = .CalleeSaved;
-    for (caller_saved_sse_registers) |register|
-        array[@enumToInt(register)] = .CallerSaved;
-    break :blk array;
+pub const Memory = struct {
+    registers: Registers,
+    storage_for_entity: Map(Entity, Storage),
 };
 
-pub const RegisterMap = struct {
-    entity_to_register: Map(Entity, Register),
-    register_to_entity: [total_available_registers]?Entity,
-    free_callee_saved_registers: [callee_saved_registers.len]Register,
-    free_caller_saved_registers: [caller_saved_registers.len]Register,
-    free_callee_saved_length: u8,
-    free_caller_saved_length: u8,
-};
+pub fn initMemory(allocator: *Allocator) Memory {
+    return Memory{
+        .registers = Registers{
+            .stored_entity = [_]?Entity{null} ** 16,
+            .volatle = RegisterStack(9){
+                .data = [9]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
+                .head = A,
+            },
+            .stable = RegisterStack(5){
+                .data = [5]Register{ B, 12, 13, 14, 15 },
+                .head = B,
+            },
+        },
+        .storage_for_entity = Map(Entity, Storage).init(allocator),
+    };
+}
 
-pub const SseRegisterMap = struct {
-    entity_to_register: Map(Entity, SseRegister),
-    register_to_entity: [total_available_sse_registers]?Entity,
-    free_callee_saved_registers: [callee_saved_sse_registers.len]SseRegister,
-    free_caller_saved_registers: [caller_saved_sse_registers.len]SseRegister,
-    free_callee_saved_length: u8,
-    free_caller_saved_length: u8,
-};
+// pub const register_kind = blk: {
+//     var array: [16]RegisterType = undefined;
+//     for (callee_saved_registers) |register|
+//         array[@enumToInt(register)] = .CalleeSaved;
+//     for (caller_saved_registers) |register|
+//         array[@enumToInt(register)] = .CallerSaved;
+//     break :blk array;
+// };
 
+// pub const sse_register_type = blk: {
+//     var array: [total_available_sse_registers]RegisterType = undefined;
+//     for (callee_saved_sse_registers) |register|
+//         array[@enumToInt(register)] = .CalleeSaved;
+//     for (caller_saved_sse_registers) |register|
+//         array[@enumToInt(register)] = .CallerSaved;
+//     break :blk array;
+// };
+//
 pub const Instruction = enum(u8) {
     Mov,
     Movsd,

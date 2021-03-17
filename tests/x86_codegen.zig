@@ -9,150 +9,32 @@ const lower = lang.lower;
 const Map = lang.data.Map;
 const Entity = lang.data.ir.Entity;
 
-test "prefer caller saved registers" {
+test "trivial" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer expect(!gpa.deinit());
+    defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var register_map = lang.data.x86.RegisterMap{
-        .entity_to_register = Map(Entity, lang.data.x86.Register).init(&arena.allocator),
-        .register_to_entity = .{null} ** lang.data.x86.total_available_registers,
-        .free_callee_saved_registers = lang.data.x86.callee_saved_registers,
-        .free_callee_saved_length = lang.data.x86.callee_saved_registers.len,
-        .free_caller_saved_registers = lang.data.x86.caller_saved_registers,
-        .free_caller_saved_length = lang.data.x86.caller_saved_registers.len,
-    };
-    const n = lang.data.x86.total_available_registers;
-    var registers: [n]lang.data.x86.Register = undefined;
-    var i: usize = 0;
-    while (i < n) : (i += 1)
-        registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
-    expectEqual(registers, .{
-        .Rax, .Rcx, .Rdx, .Rsi, .Rdi, .R8,  .R9,
-        .R10, .R11, .Rbx, .R12, .R13, .R14, .R15,
-    });
-    expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
-}
-
-test "pop caller saved registers in reverse order as pushed" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var register_map = lang.data.x86.RegisterMap{
-        .entity_to_register = Map(Entity, lang.data.x86.Register).init(&arena.allocator),
-        .register_to_entity = .{null} ** lang.data.x86.total_available_registers,
-        .free_callee_saved_registers = lang.data.x86.callee_saved_registers,
-        .free_callee_saved_length = lang.data.x86.callee_saved_registers.len,
-        .free_caller_saved_registers = lang.data.x86.caller_saved_registers,
-        .free_caller_saved_length = lang.data.x86.caller_saved_registers.len,
-    };
-    {
-        const n = lang.data.x86.total_available_registers;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            _ = lang.x86_codegen.popFreeRegister(&register_map).?;
-    }
-    for (lang.data.x86.caller_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    {
-        const n = lang.data.x86.caller_saved_registers.len;
-        var registers: [n]lang.data.x86.Register = undefined;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
-        expectEqual(registers, .{ .R11, .R10, .R9, .R8, .Rdi, .Rsi, .Rdx, .Rcx, .Rax });
-        expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
-    }
-}
-
-test "pop callee saved registers in reverse order as pushed" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var register_map = lang.data.x86.RegisterMap{
-        .entity_to_register = Map(Entity, lang.data.x86.Register).init(&arena.allocator),
-        .register_to_entity = .{null} ** lang.data.x86.total_available_registers,
-        .free_callee_saved_registers = lang.data.x86.callee_saved_registers,
-        .free_callee_saved_length = lang.data.x86.callee_saved_registers.len,
-        .free_caller_saved_registers = lang.data.x86.caller_saved_registers,
-        .free_caller_saved_length = lang.data.x86.caller_saved_registers.len,
-    };
-    {
-        const n = lang.data.x86.total_available_registers;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            _ = lang.x86_codegen.popFreeRegister(&register_map).?;
-    }
-    for (lang.data.x86.callee_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    {
-        const n = lang.data.x86.callee_saved_registers.len;
-        var registers: [n]lang.data.x86.Register = undefined;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
-        expectEqual(registers, .{ .R15, .R14, .R13, .R12, .Rbx });
-        expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
-    }
-}
-
-test "if caller saved and callee saved registers are available prefer callee saved" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    var arena = Arena.init(&gpa.allocator);
-    defer arena.deinit();
-    var register_map = lang.data.x86.RegisterMap{
-        .entity_to_register = Map(Entity, lang.data.x86.Register).init(&arena.allocator),
-        .register_to_entity = .{null} ** lang.data.x86.total_available_registers,
-        .free_callee_saved_registers = lang.data.x86.callee_saved_registers,
-        .free_callee_saved_length = lang.data.x86.callee_saved_registers.len,
-        .free_caller_saved_registers = lang.data.x86.caller_saved_registers,
-        .free_caller_saved_length = lang.data.x86.caller_saved_registers.len,
-    };
-    {
-        const n = lang.data.x86.total_available_registers;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            _ = lang.x86_codegen.popFreeRegister(&register_map).?;
-    }
-    for (lang.data.x86.callee_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    for (lang.data.x86.caller_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    {
-        const n = lang.data.x86.total_available_registers;
-        var registers: [n]lang.data.x86.Register = undefined;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
-        expectEqual(registers, .{
-            .R11, .R10, .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
-            .R15, .R14, .R13, .R12, .Rbx,
-        });
-        expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
-    }
-    for (lang.data.x86.caller_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    for (lang.data.x86.callee_saved_registers) |register|
-        lang.x86_codegen.pushFreeRegister(&register_map, register);
-    {
-        const n = lang.data.x86.total_available_registers;
-        var registers: [n]lang.data.x86.Register = undefined;
-        var i: usize = 0;
-        while (i < n) : (i += 1)
-            registers[i] = lang.x86_codegen.popFreeRegister(&register_map).?;
-        expectEqual(registers, .{
-            .R11, .R10, .R9,  .R8,  .Rdi, .Rsi, .Rdx, .Rcx, .Rax,
-            .R15, .R14, .R13, .R12, .Rbx,
-        });
-        expectEqual(lang.x86_codegen.popFreeRegister(&register_map), null);
-    }
+    const source = "(fn main :args () :ret i64 :body 42)";
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var ir = try lang.lower(&gpa.allocator, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    interned_strings.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rdi, 42
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
 }
 
 test "binary op between two signed integers" {
