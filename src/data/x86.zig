@@ -28,61 +28,17 @@ pub const DI = 7;
 
 pub const Register = u8;
 
-pub const RegisterKind = enum { CalleeSaved, CallerSaved };
+pub const RegisterKind = enum { Volatle, Stable };
 
-pub fn RegisterStack(comptime n: Register) type {
-    return struct {
-        data: [n]Register,
-        head: Register,
-    };
-}
-
-pub const Registers = struct {
-    stored_entity: [16]?Entity,
-    volatle: RegisterStack(9),
-    stable: RegisterStack(5),
+pub const register_kind = blk: {
+    var array: [16]RegisterKind = undefined;
+    for ([_]Register{ A, C, D, SP, BP, SI, DI, 8, 9, 10, 11 }) |register|
+        array[register] = .Volatle;
+    for ([_]Register{ B, 12, 13, 14, 15 }) |register|
+        array[register] = .Stable;
+    break :blk array;
 };
 
-pub const Memory = struct {
-    registers: Registers,
-    storage_for_entity: Map(Entity, Storage),
-};
-
-pub fn initMemory(allocator: *Allocator) Memory {
-    return Memory{
-        .registers = Registers{
-            .stored_entity = [_]?Entity{null} ** 16,
-            .volatle = RegisterStack(9){
-                .data = [9]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
-                .head = A,
-            },
-            .stable = RegisterStack(5){
-                .data = [5]Register{ B, 12, 13, 14, 15 },
-                .head = B,
-            },
-        },
-        .storage_for_entity = Map(Entity, Storage).init(allocator),
-    };
-}
-
-// pub const register_kind = blk: {
-//     var array: [16]RegisterType = undefined;
-//     for (callee_saved_registers) |register|
-//         array[@enumToInt(register)] = .CalleeSaved;
-//     for (caller_saved_registers) |register|
-//         array[@enumToInt(register)] = .CallerSaved;
-//     break :blk array;
-// };
-
-// pub const sse_register_type = blk: {
-//     var array: [total_available_sse_registers]RegisterType = undefined;
-//     for (callee_saved_sse_registers) |register|
-//         array[@enumToInt(register)] = .CalleeSaved;
-//     for (caller_saved_sse_registers) |register|
-//         array[@enumToInt(register)] = .CallerSaved;
-//     break :blk array;
-// };
-//
 pub const Instruction = enum(u8) {
     Mov,
     Movsd,
@@ -132,3 +88,38 @@ pub const X86 = struct {
         self.arena.child_allocator.destroy(self.arena);
     }
 };
+
+pub fn RegisterStack(comptime n: Register) type {
+    return struct {
+        data: [n]Register,
+        head: Register,
+    };
+}
+
+pub const Registers = struct {
+    stored_entity: [16]?Entity,
+    volatle: RegisterStack(9),
+    stable: RegisterStack(5),
+};
+
+pub const Memory = struct {
+    registers: Registers,
+    storage_for_entity: Map(Entity, Storage),
+};
+
+pub fn initMemory(allocator: *Allocator) Memory {
+    return Memory{
+        .registers = Registers{
+            .stored_entity = [_]?Entity{null} ** 16,
+            .volatle = RegisterStack(9){
+                .data = [9]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
+                .head = A,
+            },
+            .stable = RegisterStack(5){
+                .data = [5]Register{ B, 12, 13, 14, 15 },
+                .head = B,
+            },
+        },
+        .storage_for_entity = Map(Entity, Storage).init(allocator),
+    };
+}
