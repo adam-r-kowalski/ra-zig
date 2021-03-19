@@ -168,48 +168,50 @@ test "divide two signed integers" {
     );
 }
 
-// test "divide two signed integers where lhs is not in rax" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn main :args () :ret i64
-//         \\  :body
-//         \\  (const a 2)
-//         \\  (const b 3)
-//         \\  (const c (+ a b))
-//         \\  (const d 30)
-//         \\  (/ d c))
-//     ;
-//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-//     defer interned_strings.deinit();
-//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-//     defer ast.deinit();
-//     var ir = try lang.lower(&gpa.allocator, ast);
-//     defer ir.deinit();
-//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
-//     defer x86.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
-//     defer x86_string.deinit();
-//     std.testing.expectEqualStrings(x86_string.slice(),
-//         \\    global _main
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    mov rax, 2
-//         \\    mov rcx, 3
-//         \\    add rax, rcx
-//         \\    mov rdx, rax
-//         \\    mov rax, 30
-//         \\    mov rsi, rdx
-//         \\    cqo
-//         \\    idiv rsi
-//         \\    mov rdi, rax
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     );
-// }
+test "divide two signed integers where lhs is not in rax" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 2)
+        \\  (const b 3)
+        \\  (const c (+ a b))
+        \\  (const d 30)
+        \\  (/ d c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rax, 2
+        \\    mov rcx, 3
+        \\    mov rdx, rax
+        \\    add rax, rcx
+        \\    mov rsi, rax
+        \\    mov rax, 30
+        \\    mov rdi, rdx
+        \\    mov r8, rax
+        \\    cqo
+        \\    idiv rsi
+        \\    mov rdi, rax
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
 
 test "binary operators on signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -243,16 +245,23 @@ test "binary operators on signed integers" {
         \\_main:
         \\    mov rax, 10
         \\    mov rcx, 7
+        \\    mov rdx, rax
         \\    sub rax, rcx
-        \\    mov rdx, 3
-        \\    imul rax, rdx
-        \\    mov rsi, 15
-        \\    add rax, rsi
-        \\    mov rdi, 2
-        \\    mov r8, rdx
-        \\    cqo
-        \\    idiv rdi
+        \\    mov rsi, 3
         \\    mov rdi, rax
+        \\    imul rax, rsi
+        \\    mov r8, 15
+        \\    mov r9, rax
+        \\    add rax, r8
+        \\    mov r10, 2
+        \\    mov r11, rdx
+        \\    push r14
+        \\    mov r14, rax
+        \\    cqo
+        \\    idiv r10
+        \\    mov rdi, rax
+        \\    mov r14, qword [rbp-8]
+        \\    add rsp, 8
         \\    mov rax, 0x02000001
         \\    syscall
     );

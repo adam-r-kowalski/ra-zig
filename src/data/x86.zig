@@ -67,6 +67,7 @@ pub const Kind = enum(u8) {
     Byte,
     QuadWord,
     RelativeQuadWord,
+    QuadWordPtr,
 };
 
 pub const Block = struct {
@@ -105,6 +106,8 @@ pub const Registers = struct {
 pub const Memory = struct {
     registers: Registers,
     storage_for_entity: Map(Entity, Storage),
+    preserved: [16]?usize,
+    stack: usize,
 };
 
 pub fn initMemory(allocator: *Allocator) Memory {
@@ -121,5 +124,7 @@ pub fn initMemory(allocator: *Allocator) Memory {
             },
         },
         .storage_for_entity = Map(Entity, Storage).init(allocator),
+        .preserved = [_]?usize{null} ** 16,
+        .stack = 0,
     };
 }
