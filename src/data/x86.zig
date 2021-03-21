@@ -9,6 +9,7 @@ const Entity = @import("ir.zig").Entity;
 
 pub const StorageKind = enum(u8) {
     Register,
+    SseRegister,
     Stack,
 };
 
@@ -103,8 +104,15 @@ pub const Registers = struct {
     stable: RegisterStack(5),
 };
 
+pub const SseRegisters = struct {
+    stored_entity: [16]?Entity,
+    volatle: RegisterStack(8),
+    stable: RegisterStack(8),
+};
+
 pub const Memory = struct {
     registers: Registers,
+    sse_registers: SseRegisters,
     storage_for_entity: Map(Entity, Storage),
     preserved: [16]?usize,
     stack: usize,
@@ -115,11 +123,22 @@ pub fn initMemory(allocator: *Allocator) Memory {
         .registers = Registers{
             .stored_entity = [_]?Entity{null} ** 16,
             .volatle = RegisterStack(9){
-                .data = [9]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
+                .data = [_]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
                 .head = A,
             },
             .stable = RegisterStack(5){
-                .data = [5]Register{ B, 12, 13, 14, 15 },
+                .data = [_]Register{ B, 12, 13, 14, 15 },
+                .head = B,
+            },
+        },
+        .sse_registers = SseRegisters{
+            .stored_entity = [_]?Entity{null} ** 16,
+            .volatle = RegisterStack(8){
+                .data = [_]Register{ 0, 1, 2, 3, 4, 5, 6, 7 },
+                .head = A,
+            },
+            .stable = RegisterStack(8){
+                .data = [_]Register{ 8, 9, 10, 11, 12, 13, 14, 15 },
                 .head = B,
             },
         },

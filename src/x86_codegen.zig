@@ -22,6 +22,7 @@ const Storage = data.x86.Storage;
 const initMemory = data.x86.initMemory;
 const Register = data.x86.Register;
 const Registers = data.x86.Registers;
+const SseRegisters = data.x86.SseRegisters;
 const RegisterStack = data.x86.RegisterStack;
 const register_kind = data.x86.register_kind;
 const Kind = data.x86.Kind;
@@ -88,15 +89,15 @@ fn opRegReg(context: Context, op: Instruction, to: Register, from: Register) !vo
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opSseRegSseReg(context: Context, op: Instruction, to: SseRegisterBackup, from: SseRegisterBackup) !void {
+fn opSseRegSseReg(context: Context, op: Instruction, to: Register, from: Register) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .SseRegister;
     operand_kinds[1] = .SseRegister;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
-    operands[0] = @enumToInt(to);
-    operands[1] = @enumToInt(from);
+    operands[0] = to;
+    operands[1] = from;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -112,14 +113,14 @@ fn opRegLiteral(context: Context, op: Instruction, to: Register, lit: InternedSt
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opRegByte(context: Context, op: Instruction, to: RegisterBackup, byte: usize) !void {
+fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     operand_kinds[1] = .Byte;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
-    operands[0] = @enumToInt(to);
+    operands[0] = to;
     operands[1] = byte;
     _ = try context.x86_block.operands.insert(operands);
 }
@@ -136,14 +137,14 @@ fn opRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opSseRegRelQuadWord(context: Context, op: Instruction, to: SseRegisterBackup, quad_word: usize) !void {
+fn opSseRegRelQuadWord(context: Context, op: Instruction, to: Register, quad_word: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .SseRegister;
     operand_kinds[1] = .RelativeQuadWord;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
-    operands[0] = @enumToInt(to);
+    operands[0] = to;
     operands[1] = quad_word;
     _ = try context.x86_block.operands.insert(operands);
 }
@@ -189,6 +190,11 @@ fn freeUpRegister(context: Context, registers: *Registers) !Register {
     unreachable;
 }
 
+fn freeUpSseRegister(context: Context, registers: *SseRegisters) !Register {
+    if (popFreeRegister(registers.volatle.data.len, &registers.volatle)) |r| return r;
+    unreachable;
+}
+
 fn freeUpSpecificRegister(context: Context, registers: *Registers, register: Register) !void {
     if (registers.stored_entity[register]) |stored_entity| {
         const free_register = try freeUpRegister(context, registers);
@@ -217,6 +223,20 @@ fn moveEntityToRegister(context: Context, registers: *Registers, entity: Entity)
     const register = try freeUpRegister(context, registers);
     try opRegLiteral(context, .Mov, register, value);
     try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = register });
+    registers.stored_entity[register] = entity;
+    return register;
+}
+
+fn moveEntityToSseRegister(context: Context, registers: *SseRegisters, entity: Entity) !Register {
+    if (context.memory.storage_for_entity.get(entity)) |storage| {
+        assert(storage.kind == .SseRegister);
+        return @intCast(Register, storage.value);
+    }
+    const value = context.overload.entities.values.get(entity).?;
+    const register = try freeUpSseRegister(context, registers);
+    try context.x86.quad_words.insert(value);
+    try opSseRegRelQuadWord(context, .Movsd, register, value);
+    try context.memory.storage_for_entity.put(entity, Storage{ .kind = .SseRegister, .value = register });
     registers.stored_entity[register] = entity;
     return register;
 }
@@ -266,58 +286,81 @@ fn moveEntityToSpecificRegister(context: Context, registers: *Registers, entity:
     try opRegLiteral(context, .Mov, register, value);
 }
 
-fn preserveCallerSaveRegisters(context: Context) !void {
-    for (data.x86.caller_saved_registers) |register| {
-        if (context.register_map.register_to_entity[@enumToInt(register)]) |entity| {
-            if (context.register_map.free_callee_saved_length > 0) {
-                const index = context.register_map.free_callee_saved_registers.len - context.register_map.free_callee_saved_length;
-                const free_register = context.register_map.free_callee_saved_registers[index];
-                context.register_map.free_callee_saved_length -= 1;
-                try opRegReg(context, .Mov, free_register, register);
-                try context.register_map.entity_to_register.put(entity, free_register);
-                context.register_map.register_to_entity[@enumToInt(free_register)] = entity;
-                context.register_map.register_to_entity[@enumToInt(register)] = null;
-            } else {
-                try opReg(context, .Push, register);
-                context.register_map.register_to_entity[@enumToInt(register)] = null;
-                context.register_map.entity_to_register.removeAssertDiscard(entity);
-            }
+fn preserveVolatleRegisters(context: Context) !void {
+    var i: usize = 0;
+    while (i < context.memory.registers.volatle.head) : (i += 0) {
+        if (popFreeRegister(context.memory.registers.stable.data.len, &context.memory.registers.stable)) |free_register| {
+            try ensureRegisterPreserved(context, free_register);
+            const register = context.memory.registers.volatle.data[i];
+            const entity = context.memory.registers.stored_entity[register].?;
+            try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = free_register });
+            context.memory.registers.stored_entity[free_register] = entity;
+            context.memory.registers.stored_entity[register] = null;
+            pushFreeRegister(context.memory.registers.volatle.data.len, &context.memory.registers.volatle, register);
+            try opRegReg(context, .Mov, free_register, register);
+        } else {
+            unreachable;
         }
     }
+    context.memory.registers.volatle.head = 0;
+}
+
+const Offset = struct {
+    value: usize,
+    interned: InternedString,
+};
+
+fn alignStackTo16Bytes(context: Context) !Offset {
+    const value = (context.memory.stack + 8) % 16;
+    const buffer = try std.fmt.allocPrint(context.allocator, "{}", .{value});
+    const interned = try intern(context.interned_strings, buffer);
+    if (value > 0)
+        try opRegLiteral(context, .Sub, SP, interned);
+    return Offset{ .value = value, .interned = interned };
 }
 
 fn codegenPrintI64(context: Context, call: Call) !void {
-    const eight = try intern(context.interned_strings, "8");
-    try opRegLiteral(context, .Sub, .Rsp, eight);
-    try preserveCallerSaveRegisters(context);
-    try moveEntityToSpecificRegister(context, call.argument_entities[0], .Rsi);
+    try preserveVolatleRegisters(context);
+    try moveEntityToSpecificRegister(context, &context.memory.registers, call.argument_entities[0], SI);
     const format_string = try intern(context.interned_strings, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Mov, DI, format_string);
+    const offset = try alignStackTo16Bytes(context);
     const printf = try intern(context.interned_strings, "_printf");
     try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
-    try opRegLiteral(context, .Add, .Rsp, eight);
-    try context.register_map.entity_to_register.put(call.result_entity, .Rax);
-    context.register_map.register_to_entity[@enumToInt(RegisterBackup.Rax)] = call.result_entity;
+    try context.memory.storage_for_entity.put(call.result_entity, Storage{ .kind = .Register, .value = A });
+    context.memory.registers.stored_entity[A] = call.result_entity;
+    var i: usize = 0;
+    while (i < context.memory.registers.volatle.data.len) : (i += 1) {
+        if (context.memory.registers.volatle.data[i] == A) {
+            context.memory.registers.volatle.data[i] = context.memory.registers.volatle.data[0];
+            context.memory.registers.volatle.data[0] = @intCast(Register, A);
+            break;
+        }
+    }
+    context.memory.registers.volatle.head = 1;
+    if (offset.value > 0)
+        try opRegLiteral(context, .Add, SP, offset.interned);
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
-    const eight = try intern(context.interned_strings, "8");
-    try opRegLiteral(context, .Sub, .Rsp, eight);
-    const argument = call.argument_entities[0];
-    try preserveCallerSaveRegisters(context);
-    try preserveCallerSaveSseRegisters(context);
-    try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
-    const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
-    try context.x86.bytes.insert(format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
-    const printf = try intern(context.interned_strings, "_printf");
-    try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
-    try opRegLiteral(context, .Add, .Rsp, eight);
-    try context.register_map.entity_to_register.put(call.result_entity, .Rax);
-    context.register_map.register_to_entity[@enumToInt(RegisterBackup.Rax)] = call.result_entity;
+    unreachable;
+    // const eight = try intern(context.interned_strings, "8");
+    // try opRegLiteral(context, .Sub, .Rsp, eight);
+    // const argument = call.argument_entities[0];
+    // try preserveCallerSaveRegisters(context);
+    // try preserveCallerSaveSseRegisters(context);
+    // try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
+    // const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
+    // try context.x86.bytes.insert(format_string);
+    // try opRegByte(context, .Mov, .Rdi, format_string);
+    // const printf = try intern(context.interned_strings, "_printf");
+    // try context.x86.externs.insert(printf);
+    // try opLiteral(context, .Call, printf);
+    // try opRegLiteral(context, .Add, .Rsp, eight);
+    // try context.register_map.entity_to_register.put(call.result_entity, .Rax);
+    // context.register_map.register_to_entity[@enumToInt(RegisterBackup.Rax)] = call.result_entity;
 }
 
 fn typeOf(context: Context, entity: Entity) !Entity {
@@ -373,14 +416,22 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    unreachable;
-    // const lhs_register = try moveEntityToSseRegister(context, lhs);
-    // const rhs_register = try moveEntityToSseRegister(context, rhs);
-    // try opSseRegSseReg(context, op, lhs_register, rhs_register);
-    // try context.sse_register_map.entity_to_register.put(call.result_entity, lhs_register);
-    // context.sse_register_map.register_to_entity[@enumToInt(lhs_register)] = call.result_entity;
-    // context.sse_register_map.entity_to_register.removeAssertDiscard(rhs);
-    // try context.x86.types.putNoClobber(call.result_entity, F64);
+    const result_register = try moveEntityToSseRegister(context, &context.memory.sse_registers, lhs);
+    const rhs_register = try moveEntityToSseRegister(context, &context.memory.sse_registers, rhs);
+    const lhs_register = try freeUpSseRegister(context, &context.memory.sse_registers);
+    try opSseRegSseReg(context, .Movsd, lhs_register, result_register);
+    try opSseRegSseReg(context, op, result_register, rhs_register);
+    try context.memory.storage_for_entity.put(lhs, Storage{
+        .kind = .SseRegister,
+        .value = lhs_register,
+    });
+    try context.memory.storage_for_entity.put(call.result_entity, Storage{
+        .kind = .SseRegister,
+        .value = result_register,
+    });
+    context.memory.sse_registers.stored_entity[lhs_register] = lhs;
+    context.memory.sse_registers.stored_entity[result_register] = call.result_entity;
+    try context.x86.types.putNoClobber(call.result_entity, F64);
 }
 
 fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
@@ -406,10 +457,10 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
 }
 
 fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
+    try freeUpSpecificRegister(context, &context.memory.registers, D);
     const result_register = A;
     try moveEntityToSpecificRegister(context, &context.memory.registers, lhs, result_register);
     var rhs_register = try moveEntityToRegister(context, &context.memory.registers, rhs);
-    try freeUpSpecificRegister(context, &context.memory.registers, D);
     const lhs_register = try freeUpRegister(context, &context.memory.registers);
     try opRegReg(context, .Mov, lhs_register, result_register);
     try opNoArgs(context.x86_block, .Cqo);
@@ -456,12 +507,13 @@ fn codegenCall(context: Context, i: usize) !void {
         @enumToInt(Strings.Subtract) => try codegenBinaryOp(context, call, SubOps),
         @enumToInt(Strings.Multiply) => try codegenBinaryOp(context, call, MulOps),
         @enumToInt(Strings.Divide) => try codegenDivide(context, call),
-        // @enumToInt(Strings.Print) => try codegenPrint(context, call),
+        @enumToInt(Strings.Print) => try codegenPrint(context, call),
         else => unreachable,
     }
 }
 
 fn resetStack(context: Context) !void {
+    if (context.memory.stack == 0) return;
     const buffer = try std.fmt.allocPrint(context.allocator, "{}", .{context.memory.stack});
     const interned = try intern(context.interned_strings, buffer);
     try opRegLiteral(context, .Add, SP, interned);
@@ -582,24 +634,25 @@ fn writeRegister(output: *List(u8), register: usize) !void {
     }
 }
 
-fn writeSseRegister(output: *List(u8), register: SseRegisterBackup) !void {
+fn writeSseRegister(output: *List(u8), register: usize) !void {
     switch (register) {
-        .Xmm0 => try output.insertSlice("xmm0"),
-        .Xmm1 => try output.insertSlice("xmm1"),
-        .Xmm2 => try output.insertSlice("xmm2"),
-        .Xmm3 => try output.insertSlice("xmm3"),
-        .Xmm4 => try output.insertSlice("xmm4"),
-        .Xmm5 => try output.insertSlice("xmm5"),
-        .Xmm6 => try output.insertSlice("xmm6"),
-        .Xmm7 => try output.insertSlice("xmm7"),
-        .Xmm8 => try output.insertSlice("xmm8"),
-        .Xmm9 => try output.insertSlice("xmm9"),
-        .Xmm10 => try output.insertSlice("xmm10"),
-        .Xmm11 => try output.insertSlice("xmm11"),
-        .Xmm12 => try output.insertSlice("xmm12"),
-        .Xmm13 => try output.insertSlice("xmm13"),
-        .Xmm14 => try output.insertSlice("xmm14"),
-        .Xmm15 => try output.insertSlice("xmm15"),
+        0 => try output.insertSlice("xmm0"),
+        1 => try output.insertSlice("xmm1"),
+        2 => try output.insertSlice("xmm2"),
+        3 => try output.insertSlice("xmm3"),
+        4 => try output.insertSlice("xmm4"),
+        5 => try output.insertSlice("xmm5"),
+        6 => try output.insertSlice("xmm6"),
+        7 => try output.insertSlice("xmm7"),
+        8 => try output.insertSlice("xmm8"),
+        9 => try output.insertSlice("xmm9"),
+        10 => try output.insertSlice("xmm10"),
+        11 => try output.insertSlice("xmm11"),
+        12 => try output.insertSlice("xmm12"),
+        13 => try output.insertSlice("xmm13"),
+        14 => try output.insertSlice("xmm14"),
+        15 => try output.insertSlice("xmm15"),
+        else => unreachable,
     }
 }
 
@@ -649,7 +702,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
                 switch (operand_kind) {
                     .Immediate => try output.insertFormatted("{}", .{operands[k]}),
                     .Register => try writeRegister(&output, operands[k]),
-                    .SseRegister => unreachable,
+                    .SseRegister => try writeSseRegister(&output, operands[k]),
                     .Label => try writeLabel(&output, operands[k]),
                     .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
                     .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
