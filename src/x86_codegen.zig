@@ -288,19 +288,28 @@ fn moveEntityToSpecificRegister(context: Context, registers: *Registers, entity:
 
 fn preserveVolatleRegisters(context: Context) !void {
     var i: usize = 0;
-    while (i < context.memory.registers.volatle.head) : (i += 0) {
-        if (popFreeRegister(context.memory.registers.stable.data.len, &context.memory.registers.stable)) |free_register| {
-            try ensureRegisterPreserved(context, free_register);
-            const register = context.memory.registers.volatle.data[i];
-            const entity = context.memory.registers.stored_entity[register].?;
-            try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = free_register });
-            context.memory.registers.stored_entity[free_register] = entity;
-            context.memory.registers.stored_entity[register] = null;
-            pushFreeRegister(context.memory.registers.volatle.data.len, &context.memory.registers.volatle, register);
-            try opRegReg(context, .Mov, free_register, register);
-        } else {
-            unreachable;
-        }
+    const registers = &context.memory.registers;
+    while (i < registers.volatle.head) : (i += 0) {
+        const volatle_register = registers.volatle.data[i];
+        const volatle_entity = registers.stored_entity[volatle_register].?;
+        const stable_register = blk: {
+            if (popFreeRegister(registers.stable.data.len, &registers.stable)) |stable_register| {
+                try ensureRegisterPreserved(context, stable_register);
+                break :blk stable_register;
+            } else {
+                const stable_register = registers.stable.data[0];
+                try opReg(context, .Push, stable_register);
+                context.memory.stack += 8;
+                const stable_entity = registers.stored_entity[stable_register].?;
+                try context.memory.storage_for_entity.put(stable_entity, Storage{ .kind = .Stack, .value = context.memory.stack });
+                break :blk stable_register;
+            }
+        };
+        try context.memory.storage_for_entity.put(volatle_entity, Storage{ .kind = .Register, .value = stable_register });
+        registers.stored_entity[stable_register] = volatle_entity;
+        try opRegReg(context, .Mov, stable_register, volatle_register);
+        registers.stored_entity[volatle_register] = null;
+        pushFreeRegister(registers.volatle.data.len, &registers.volatle, volatle_register);
     }
     context.memory.registers.volatle.head = 0;
 }
@@ -314,8 +323,10 @@ fn alignStackTo16Bytes(context: Context) !Offset {
     const value = (context.memory.stack + 8) % 16;
     const buffer = try std.fmt.allocPrint(context.allocator, "{}", .{value});
     const interned = try intern(context.interned_strings, buffer);
-    if (value > 0)
+    if (value > 0) {
         try opRegLiteral(context, .Sub, SP, interned);
+        context.memory.stack += 8;
+    }
     return Offset{ .value = value, .interned = interned };
 }
 
@@ -347,8 +358,10 @@ fn codegenPrintI64(context: Context, call: Call) !void {
         }
     }
     context.memory.registers.volatle.head = 1;
-    if (offset.value > 0)
+    if (offset.value > 0) {
         try opRegLiteral(context, .Add, SP, offset.interned);
+        context.memory.stack -= offset.value;
+    }
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
@@ -507,9 +520,125 @@ fn codegenDivide(context: Context, call: Call) !void {
     }
 }
 
+fn debugMemory(context: Context) void {
+    var volatle_len = context.memory.registers.volatle.data.len - context.memory.registers.volatle.head;
+    var stable_len = context.memory.registers.stable.data.len - context.memory.registers.stable.head;
+    var len = std.math.max(volatle_len, stable_len);
+    std.debug.print("\n========= DEBUG MEMORY ========", .{});
+    std.debug.print("\n----------------------------", .{});
+    var i: usize = 0;
+    while (i < volatle_len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n|           | volatle ({})  | ", .{context.memory.registers.volatle.head});
+    for (context.memory.registers.volatle.data[context.memory.registers.volatle.head..]) |register| {
+        switch (register) {
+            A => std.debug.print("a ", .{}),
+            C => std.debug.print("c ", .{}),
+            D => std.debug.print("d ", .{}),
+            B => std.debug.print("b ", .{}),
+            BP => std.debug.print("bp", .{}),
+            SP => std.debug.print("sp", .{}),
+            SI => std.debug.print("si", .{}),
+            DI => std.debug.print("di", .{}),
+            else => std.debug.print("{:<2}", .{register}),
+        }
+        std.debug.print(" | ", .{});
+    }
+    std.debug.print("\n| registers |---------------", .{});
+    i = 0;
+    while (i < len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n|           | stable  ({})  | ", .{context.memory.registers.stable.head});
+    for (context.memory.registers.stable.data[context.memory.registers.stable.head..]) |register| {
+        std.debug.print("{:<2} | ", .{register});
+    }
+    std.debug.print("\n|---------------------------", .{});
+    i = 0;
+    while (i < stable_len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n| register  | entity       |\n", .{});
+    for (context.memory.registers.stored_entity) |entity, register| {
+        if (entity == null) continue;
+        std.debug.print("| ", .{});
+        switch (register) {
+            A => std.debug.print("a ", .{}),
+            C => std.debug.print("c ", .{}),
+            D => std.debug.print("d ", .{}),
+            B => std.debug.print("b ", .{}),
+            BP => std.debug.print("bp", .{}),
+            SP => std.debug.print("sp", .{}),
+            SI => std.debug.print("si", .{}),
+            DI => std.debug.print("di", .{}),
+            else => std.debug.print("{:<2}", .{register}),
+        }
+        std.debug.print("        | {:<12} |\n", .{entity});
+    }
+    std.debug.print("----------------------------", .{});
+
+    volatle_len = context.memory.sse_registers.volatle.data.len - context.memory.sse_registers.volatle.head;
+    stable_len = context.memory.sse_registers.stable.data.len - context.memory.sse_registers.stable.head;
+    len = std.math.max(volatle_len, stable_len);
+    std.debug.print("\n----------------------------", .{});
+    i = 0;
+    while (i < volatle_len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n|    sse    | volatle ({})  | ", .{context.memory.sse_registers.volatle.head});
+    for (context.memory.sse_registers.volatle.data[context.memory.sse_registers.volatle.head..]) |register| {
+        std.debug.print("{:<2} | ", .{register});
+    }
+    std.debug.print("\n|           |---------------", .{});
+    i = 0;
+    while (i < len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n| registers | stable  ({})  | ", .{context.memory.sse_registers.stable.head});
+    for (context.memory.sse_registers.stable.data[context.memory.sse_registers.stable.head..]) |register| {
+        std.debug.print("{:<2} | ", .{register});
+    }
+    std.debug.print("\n|---------------------------", .{});
+    i = 0;
+    while (i < stable_len) : (i += 1) std.debug.print("-----", .{});
+    std.debug.print("\n| register  | entity       |\n", .{});
+    for (context.memory.sse_registers.stored_entity) |entity, register| {
+        if (entity == null) continue;
+        std.debug.print("| {:<2}        | {:<12} |\n", .{ register, entity });
+    }
+    std.debug.print("----------------------------", .{});
+
+    std.debug.print("\nstored entity\n", .{});
+    for (context.memory.sse_registers.stored_entity) |entity, register| {
+        if (entity == null) continue;
+        switch (register) {
+            else => std.debug.print("{:<2} | {}", .{ register, entity }),
+        }
+        std.debug.print("\n", .{});
+    }
+    std.debug.print("\nstorage for entity\n", .{});
+    var iterator = context.memory.storage_for_entity.iterator();
+    while (iterator.next()) |entry| {
+        const entity = entry.key;
+        const storage = entry.value;
+        std.debug.print("{:<2} | ", .{entity});
+        switch (storage.kind) {
+            .Register => {
+                switch (storage.value) {
+                    A => std.debug.print("a", .{}),
+                    C => std.debug.print("c", .{}),
+                    D => std.debug.print("d", .{}),
+                    B => std.debug.print("b", .{}),
+                    BP => std.debug.print("bp", .{}),
+                    SP => std.debug.print("sp", .{}),
+                    SI => std.debug.print("si", .{}),
+                    DI => std.debug.print("di", .{}),
+                    else => std.debug.print("{:<2}", .{storage.value}),
+                }
+            },
+            .SseRegister => std.debug.print("{:<2}", .{storage.value}),
+            .Stack => std.debug.print("[rbp - {}]", .{storage.value}),
+        }
+        std.debug.print("\n", .{});
+    }
+    std.debug.print("===============================", .{});
+}
+
 fn codegenCall(context: Context, i: usize) !void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[i]];
-    switch (context.overload.entities.names.get(call.function_entity).?) {
+    const name = context.overload.entities.names.get(call.function_entity).?;
+    switch (name) {
         @enumToInt(Strings.Add) => try codegenBinaryOp(context, call, AddOps),
         @enumToInt(Strings.Subtract) => try codegenBinaryOp(context, call, SubOps),
         @enumToInt(Strings.Multiply) => try codegenBinaryOp(context, call, MulOps),
@@ -572,6 +701,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
             .Call => try codegenCall(context, i),
             else => unreachable,
         }
+        debugMemory(context);
     }
 }
 
