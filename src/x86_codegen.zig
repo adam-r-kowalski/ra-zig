@@ -321,7 +321,14 @@ fn alignStackTo16Bytes(context: Context) !Offset {
 
 fn codegenPrintI64(context: Context, call: Call) !void {
     try preserveVolatleRegisters(context);
-    try moveEntityToSpecificRegister(context, &context.memory.registers, call.argument_entities[0], SI);
+    const entity = call.argument_entities[0];
+    if (context.memory.storage_for_entity.get(entity)) |storage| {
+        assert(storage.kind == .Register);
+        try opRegReg(context, .Mov, SI, @intCast(Register, storage.value));
+    } else {
+        const value = context.overload.entities.values.get(entity).?;
+        try opRegLiteral(context, .Mov, SI, value);
+    }
     const format_string = try intern(context.interned_strings, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, DI, format_string);
