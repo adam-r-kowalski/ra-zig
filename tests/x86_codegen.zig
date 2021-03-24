@@ -808,7 +808,7 @@ test "print signed float after addition" {
         \\
         \\    section .data
         \\
-        \\byte19: db "%f", 10, 0
+        \\byte20: db "%f", 10, 0
         \\quad_word15: dq 10.4
         \\quad_word17: dq 20.5
         \\
@@ -819,19 +819,22 @@ test "print signed float after addition" {
         \\    movsd xmm1, [rel quad_word17]
         \\    movsd xmm2, xmm0
         \\    addsd xmm0, xmm1
-        \\    push xmm8
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm8
         \\    movsd xmm8, xmm0
-        \\    push xmm9
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm9
         \\    movsd xmm9, xmm1
-        \\    push xmm10
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-24], xmm10
         \\    movsd xmm10, xmm2
         \\    movsd xmm0, xmm8
-        \\    mov rdi, byte19
+        \\    mov rdi, byte20
         \\    call _printf
         \\    mov rdi, rax
-        \\    mov xmm8, qword [rbp-8]
-        \\    mov xmm9, qword [rbp-16]
-        \\    mov xmm10, qword [rbp-24]
+        \\    movsd xmm8, qword [rbp-8]
+        \\    movsd xmm9, qword [rbp-16]
+        \\    movsd xmm10, qword [rbp-24]
         \\    add rsp, 24
         \\    mov rax, 0x02000001
         \\    syscall

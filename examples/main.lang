@@ -1,7 +1,6 @@
 (fn main :args () :ret i64
   :body
-  (const a 10.3)
-  (const b 20.4)
-  (const c 40)
-  (print (/ a b))
-  (print (/ a b)))
+  (const a 10.0)
+  (const b 20.0)
+  (const c 40.0)
+  (print (* c a)))

@@ -125,8 +125,8 @@ fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
-    _ = try context.x86_block.instructions.insert(.Mov);
+fn opRegQuadWordPtr(context: Context, op: Instruction, register: Register, offset: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     operand_kinds[1] = .QuadWordPtr;
@@ -137,8 +137,8 @@ fn opRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opSseRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
-    _ = try context.x86_block.instructions.insert(.Mov);
+fn opSseRegQuadWordPtr(context: Context, op: Instruction, register: Register, offset: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .SseRegister;
     operand_kinds[1] = .QuadWordPtr;
@@ -146,6 +146,18 @@ fn opSseRegQuadWordPtr(context: Context, register: Register, offset: usize) !voi
     const operands = try context.allocator.alloc(usize, 2);
     operands[0] = register;
     operands[1] = offset;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
+fn opQuadWordPtrSseReg(context: Context, op: Instruction, offset: usize, register: Register) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .QuadWordPtr;
+    operand_kinds[1] = .SseRegister;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = offset;
+    operands[1] = register;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -196,22 +208,24 @@ fn ensureRegisterPreserved(context: Context, register: Register) !void {
 
 fn ensureSseRegisterPreserved(context: Context, register: Register) !void {
     if (context.memory.sse_preserved[register]) |_| return;
-    try opSseReg(context, .Push, register);
+    const eight = try intern(context.interned_strings, "8");
     context.memory.stack += 8;
+    try opRegLiteral(context, .Sub, SP, eight);
+    try opQuadWordPtrSseReg(context, .Movsd, context.memory.stack, register);
     context.memory.sse_preserved[register] = context.memory.stack;
 }
 
 fn restorePreservedRegisters(context: Context) !void {
     for ([_]Register{ B, 12, 13, 14, 15 }) |register| {
         if (context.memory.preserved[register]) |offset| {
-            try opRegQuadWordPtr(context, register, offset);
+            try opRegQuadWordPtr(context, .Mov, register, offset);
             context.memory.preserved[register] = null;
         }
     }
     var register: u8 = 8;
     while (register < 16) : (register += 1) {
         if (context.memory.sse_preserved[register]) |offset| {
-            try opSseRegQuadWordPtr(context, register, offset);
+            try opSseRegQuadWordPtr(context, .Movsd, register, offset);
             context.memory.sse_preserved[register] = null;
         }
     }
@@ -356,8 +370,10 @@ fn preserveVolatleRegisters(context: Context) !void {
                 break :blk stable_register;
             } else {
                 const stable_register = sse_registers.stable.data[0];
-                try opSseReg(context, .Push, stable_register);
+                const eight = try intern(context.interned_strings, "8");
                 context.memory.stack += 8;
+                try opRegLiteral(context, .Sub, SP, eight);
+                try opQuadWordPtrSseReg(context, .Movsd, context.memory.stack, stable_register);
                 const stable_entity = sse_registers.stored_entity[stable_register].?;
                 try context.memory.storage_for_entity.put(stable_entity, Storage{ .kind = .Stack, .value = context.memory.stack });
                 break :blk stable_register;
