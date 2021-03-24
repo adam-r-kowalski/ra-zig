@@ -181,7 +181,8 @@ fn restorePreservedRegisters(context: Context) !void {
     }
 }
 
-fn freeUpRegister(context: Context, registers: *Registers) !Register {
+fn freeUpRegister(context: Context) !Register {
+    const registers = &context.memory.registers;
     if (popFreeRegister(registers.volatle.data.len, &registers.volatle)) |r| return r;
     if (popFreeRegister(registers.stable.data.len, &registers.stable)) |r| {
         try ensureRegisterPreserved(context, r);
@@ -190,21 +191,24 @@ fn freeUpRegister(context: Context, registers: *Registers) !Register {
     unreachable;
 }
 
-fn freeUpSseRegister(context: Context, registers: *SseRegisters) !Register {
+fn freeUpSseRegister(context: Context) !Register {
+    const registers = &context.memory.sse_registers;
     if (popFreeRegister(registers.volatle.data.len, &registers.volatle)) |r| return r;
     unreachable;
 }
 
-fn freeUpSpecificRegister(context: Context, registers: *Registers, register: Register) !void {
+fn freeUpSpecificRegister(context: Context, register: Register) !void {
+    const registers = &context.memory.registers;
     if (registers.stored_entity[register]) |stored_entity| {
-        const free_register = try freeUpRegister(context, registers);
+        const free_register = try freeUpRegister(context);
         try context.memory.storage_for_entity.put(stored_entity, Storage{ .kind = .Register, .value = free_register });
         registers.stored_entity[free_register] = stored_entity;
         try opRegReg(context, .Mov, free_register, register);
     }
 }
 
-fn returnRegisterForUse(context: Context, registers: *Registers, register: Register) void {
+fn returnRegisterForUse(context: Context, register: Register) void {
+    const registers = &context.memory.registers;
     switch (register_kind[register]) {
         .Volatle => pushFreeRegister(registers.volatle.data.len, &registers.volatle, register),
         .Stable => pushFreeRegister(registers.stable.data.len, &registers.stable, register),
@@ -214,30 +218,30 @@ fn returnRegisterForUse(context: Context, registers: *Registers, register: Regis
     context.memory.storage_for_entity.removeAssertDiscard(entity);
 }
 
-fn moveEntityToRegister(context: Context, registers: *Registers, entity: Entity) !Register {
+fn moveEntityToRegister(context: Context, entity: Entity) !Register {
     if (context.memory.storage_for_entity.get(entity)) |storage| {
         assert(storage.kind == .Register);
         return @intCast(Register, storage.value);
     }
     const value = context.overload.entities.values.get(entity).?;
-    const register = try freeUpRegister(context, registers);
+    const register = try freeUpRegister(context);
     try opRegLiteral(context, .Mov, register, value);
     try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = register });
-    registers.stored_entity[register] = entity;
+    context.memory.registers.stored_entity[register] = entity;
     return register;
 }
 
-fn moveEntityToSseRegister(context: Context, registers: *SseRegisters, entity: Entity) !Register {
+fn moveEntityToSseRegister(context: Context, entity: Entity) !Register {
     if (context.memory.storage_for_entity.get(entity)) |storage| {
         assert(storage.kind == .SseRegister);
         return @intCast(Register, storage.value);
     }
     const value = context.overload.entities.values.get(entity).?;
-    const register = try freeUpSseRegister(context, registers);
+    const register = try freeUpSseRegister(context);
     try context.x86.quad_words.insert(value);
     try opSseRegRelQuadWord(context, .Movsd, register, value);
     try context.memory.storage_for_entity.put(entity, Storage{ .kind = .SseRegister, .value = register });
-    registers.stored_entity[register] = entity;
+    context.memory.sse_registers.stored_entity[register] = entity;
     return register;
 }
 
@@ -252,29 +256,26 @@ fn removeRegisterFromRegisterStack(comptime n: Register, register_stack: *Regist
     }
 }
 
-fn removeRegisterFromFreeList(registers: *Registers, register: Register) void {
-    switch (register_kind[register]) {
-        .Volatle => removeRegisterFromRegisterStack(registers.volatle.data.len, &registers.volatle, register),
-        .Stable => removeRegisterFromRegisterStack(registers.stable.data.len, &registers.stable, register),
-    }
-}
-
-fn moveEntityToSpecificRegister(context: Context, registers: *Registers, entity: Entity, register: Register) !void {
+fn moveEntityToSpecificRegister(context: Context, entity: Entity, register: Register) !void {
+    const registers = &context.memory.registers;
     // ensure there is no entity currently in the desired register
     if (registers.stored_entity[register]) |stored_entity| {
         if (stored_entity == entity) return;
-        const free_register = try freeUpRegister(context, registers);
+        const free_register = try freeUpRegister(context);
         try context.memory.storage_for_entity.put(stored_entity, Storage{ .kind = .Register, .value = free_register });
         registers.stored_entity[free_register] = stored_entity;
         try opRegReg(context, .Mov, free_register, register);
     } else {
-        removeRegisterFromFreeList(registers, register);
+        switch (register_kind[register]) {
+            .Volatle => removeRegisterFromRegisterStack(registers.volatle.data.len, &registers.volatle, register),
+            .Stable => removeRegisterFromRegisterStack(registers.stable.data.len, &registers.stable, register),
+        }
     }
     // move the entity from it's current storage into the desired register
     if (context.memory.storage_for_entity.get(entity)) |storage| {
         assert(storage.kind == .Register);
         try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = register });
-        returnRegisterForUse(context, registers, @intCast(Register, storage.value));
+        returnRegisterForUse(context, @intCast(Register, storage.value));
         registers.stored_entity[register] = entity;
         try opRegReg(context, .Mov, register, @intCast(Register, storage.value));
         return;
@@ -287,10 +288,8 @@ fn moveEntityToSpecificRegister(context: Context, registers: *Registers, entity:
 }
 
 fn preserveVolatleRegisters(context: Context) !void {
-    var i: usize = 0;
     const registers = &context.memory.registers;
-    while (i < registers.volatle.head) : (i += 0) {
-        const volatle_register = registers.volatle.data[i];
+    for (registers.volatle.data[0..registers.volatle.head]) |volatle_register| {
         const volatle_entity = registers.stored_entity[volatle_register].?;
         const stable_register = blk: {
             if (popFreeRegister(registers.stable.data.len, &registers.stable)) |stable_register| {
@@ -309,7 +308,6 @@ fn preserveVolatleRegisters(context: Context) !void {
         registers.stored_entity[stable_register] = volatle_entity;
         try opRegReg(context, .Mov, stable_register, volatle_register);
         registers.stored_entity[volatle_register] = null;
-        pushFreeRegister(registers.volatle.data.len, &registers.volatle, volatle_register);
     }
     context.memory.registers.volatle.head = 0;
 }
@@ -365,22 +363,37 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
-    unreachable;
-    // const eight = try intern(context.interned_strings, "8");
-    // try opRegLiteral(context, .Sub, .Rsp, eight);
-    // const argument = call.argument_entities[0];
-    // try preserveCallerSaveRegisters(context);
-    // try preserveCallerSaveSseRegisters(context);
-    // try moveEntityToSpecificSseRegister(context, call.argument_entities[0], .Xmm0);
-    // const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
-    // try context.x86.bytes.insert(format_string);
-    // try opRegByte(context, .Mov, .Rdi, format_string);
-    // const printf = try intern(context.interned_strings, "_printf");
-    // try context.x86.externs.insert(printf);
-    // try opLiteral(context, .Call, printf);
-    // try opRegLiteral(context, .Add, .Rsp, eight);
-    // try context.register_map.entity_to_register.put(call.result_entity, .Rax);
-    // context.register_map.register_to_entity[@enumToInt(RegisterBackup.Rax)] = call.result_entity;
+    try preserveVolatleRegisters(context);
+    const entity = call.argument_entities[0];
+    if (context.memory.storage_for_entity.get(entity)) |storage| {
+        assert(storage.kind == .Register);
+        try opSseRegSseReg(context, .Movsd, 0, @intCast(Register, storage.value));
+    } else {
+        const value = context.overload.entities.values.get(entity).?;
+        try context.x86.quad_words.insert(value);
+        try opSseRegRelQuadWord(context, .Movsd, 0, value);
+    }
+    const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
+    try context.x86.bytes.insert(format_string);
+    try opRegByte(context, .Mov, DI, format_string);
+    const offset = try alignStackTo16Bytes(context);
+    const printf = try intern(context.interned_strings, "_printf");
+    try context.x86.externs.insert(printf);
+    try opLiteral(context, .Call, printf);
+    try context.memory.storage_for_entity.put(call.result_entity, Storage{ .kind = .Register, .value = A });
+    context.memory.registers.stored_entity[A] = call.result_entity;
+    var i: usize = 0;
+    while (i < context.memory.registers.volatle.data.len) : (i += 1) {
+        if (context.memory.registers.volatle.data[i] == A) {
+            context.memory.registers.volatle.data[i] = context.memory.registers.volatle.data[0];
+            context.memory.registers.volatle.data[0] = @intCast(Register, A);
+            break;
+        }
+    }
+    if (offset.value > 0) {
+        try opRegLiteral(context, .Add, SP, offset.interned);
+        context.memory.stack -= offset.value;
+    }
 }
 
 fn typeOf(context: Context, entity: Entity) !Entity {
@@ -417,9 +430,9 @@ const SubOps = BinaryOps{ .int = .Sub, .float = .Subsd };
 const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
 fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const result_register = try moveEntityToRegister(context, &context.memory.registers, lhs);
-    const rhs_register = try moveEntityToRegister(context, &context.memory.registers, rhs);
-    const lhs_register = try freeUpRegister(context, &context.memory.registers);
+    const result_register = try moveEntityToRegister(context, lhs);
+    const rhs_register = try moveEntityToRegister(context, rhs);
+    const lhs_register = try freeUpRegister(context);
     try opRegReg(context, .Mov, lhs_register, result_register);
     try opRegReg(context, op, result_register, rhs_register);
     try context.memory.storage_for_entity.put(lhs, Storage{
@@ -436,9 +449,9 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const result_register = try moveEntityToSseRegister(context, &context.memory.sse_registers, lhs);
-    const rhs_register = try moveEntityToSseRegister(context, &context.memory.sse_registers, rhs);
-    const lhs_register = try freeUpSseRegister(context, &context.memory.sse_registers);
+    const result_register = try moveEntityToSseRegister(context, lhs);
+    const rhs_register = try moveEntityToSseRegister(context, rhs);
+    const lhs_register = try freeUpSseRegister(context);
     try opSseRegSseReg(context, .Movsd, lhs_register, result_register);
     try opSseRegSseReg(context, op, result_register, rhs_register);
     try context.memory.storage_for_entity.put(lhs, Storage{
@@ -477,11 +490,13 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
 }
 
 fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
-    try freeUpSpecificRegister(context, &context.memory.registers, D);
+    try freeUpSpecificRegister(context, D);
     const result_register = A;
-    try moveEntityToSpecificRegister(context, &context.memory.registers, lhs, result_register);
-    var rhs_register = try moveEntityToRegister(context, &context.memory.registers, rhs);
-    const lhs_register = try freeUpRegister(context, &context.memory.registers);
+    try moveEntityToSpecificRegister(context, lhs, result_register);
+    var rhs_register = try moveEntityToRegister(context, rhs);
+    const lhs_register = try freeUpRegister(
+        context,
+    );
     try opRegReg(context, .Mov, lhs_register, result_register);
     try opNoArgs(context.x86_block, .Cqo);
     try opReg(context, .Idiv, rhs_register);
@@ -599,27 +614,21 @@ fn debugMemory(context: Context) void {
     }
     std.debug.print("----------------------------", .{});
 
-    std.debug.print("\nstored entity\n", .{});
-    for (context.memory.sse_registers.stored_entity) |entity, register| {
-        if (entity == null) continue;
-        switch (register) {
-            else => std.debug.print("{:<2} | {}", .{ register, entity }),
-        }
-        std.debug.print("\n", .{});
-    }
-    std.debug.print("\nstorage for entity\n", .{});
+    std.debug.print("\n--------------------", .{});
+    std.debug.print("\n| entity | storage |\n", .{});
     var iterator = context.memory.storage_for_entity.iterator();
     while (iterator.next()) |entry| {
         const entity = entry.key;
         const storage = entry.value;
-        std.debug.print("{:<2} | ", .{entity});
+        std.debug.print("| {:<6} | ", .{entity});
         switch (storage.kind) {
             .Register => {
+                std.debug.print("reg ", .{});
                 switch (storage.value) {
-                    A => std.debug.print("a", .{}),
-                    C => std.debug.print("c", .{}),
-                    D => std.debug.print("d", .{}),
-                    B => std.debug.print("b", .{}),
+                    A => std.debug.print("a ", .{}),
+                    C => std.debug.print("c ", .{}),
+                    D => std.debug.print("d ", .{}),
+                    B => std.debug.print("b ", .{}),
                     BP => std.debug.print("bp", .{}),
                     SP => std.debug.print("sp", .{}),
                     SI => std.debug.print("si", .{}),
@@ -630,8 +639,9 @@ fn debugMemory(context: Context) void {
             .SseRegister => std.debug.print("{:<2}", .{storage.value}),
             .Stack => std.debug.print("[rbp - {}]", .{storage.value}),
         }
-        std.debug.print("\n", .{});
+        std.debug.print("  |\n", .{});
     }
+    std.debug.print("--------------------\n", .{});
     std.debug.print("===============================", .{});
 }
 
@@ -701,7 +711,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
             .Call => try codegenCall(context, i),
             else => unreachable,
         }
-        debugMemory(context);
+        // debugMemory(context);
     }
 }
 

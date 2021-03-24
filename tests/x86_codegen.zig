@@ -255,12 +255,12 @@ test "binary operators on signed integers" {
         \\    add rax, r8
         \\    mov r10, rdx
         \\    mov r11, 2
-        \\    push r14
-        \\    mov r14, rax
+        \\    push rbx
+        \\    mov rbx, rax
         \\    cqo
         \\    idiv r11
         \\    mov rdi, rax
-        \\    mov r14, qword [rbp-8]
+        \\    mov rbx, qword [rbp-8]
         \\    add rsp, 8
         \\    mov rax, 0x02000001
         \\    syscall
@@ -596,21 +596,21 @@ test "print three signed integer" {
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
-        \\    push r14
-        \\    mov r14, rax
+        \\    push rbx
+        \\    mov rbx, rax
         \\    mov rsi, 20
         \\    mov rdi, byte20
         \\    call _printf
-        \\    push r15
-        \\    mov r15, rax
+        \\    push r12
+        \\    mov r12, rax
         \\    mov rsi, 30
         \\    mov rdi, byte20
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax
-        \\    mov r14, qword [rbp-8]
-        \\    mov r15, qword [rbp-16]
+        \\    mov rbx, qword [rbp-8]
+        \\    mov r12, qword [rbp-16]
         \\    add rsp, 16
         \\    mov rax, 0x02000001
         \\    syscall
@@ -659,110 +659,126 @@ test "print four signed integer" {
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
-        \\    push r14
-        \\    mov r14, rax
+        \\    push rbx
+        \\    mov rbx, rax
         \\    mov rsi, 20
         \\    mov rdi, byte21
         \\    call _printf
-        \\    push r15
-        \\    mov r15, rax
+        \\    push r12
+        \\    mov r12, rax
+        \\    mov rsi, 30
+        \\    mov rdi, byte21
+        \\    sub rsp, 8
+        \\    call _printf
+        \\    add rsp, 8
+        \\    push r13
+        \\    mov r13, rax
         \\    mov rsi, 30
         \\    mov rdi, byte21
         \\    call _printf
+        \\    mov rdi, rax
+        \\    mov rbx, qword [rbp-8]
+        \\    mov r12, qword [rbp-16]
+        \\    mov r13, qword [rbp-24]
+        \\    add rsp, 24
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "print signed integer after addition" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10)
+        \\  (const b 20)
+        \\  (const c (+ a b))
+        \\  (print c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
         \\
+        \\    section .data
+        \\
+        \\byte19: db "%ld", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rax, 10
+        \\    mov rcx, 20
+        \\    mov rdx, rax
+        \\    add rax, rcx
+        \\    push rbx
+        \\    mov rbx, rax
+        \\    push r12
+        \\    mov r12, rcx
+        \\    push r13
+        \\    mov r13, rdx
+        \\    mov rsi, rbx
+        \\    mov rdi, byte19
+        \\    call _printf
+        \\    mov rdi, rax
+        \\    mov rbx, qword [rbp-8]
+        \\    mov r12, qword [rbp-16]
+        \\    mov r13, qword [rbp-24]
+        \\    add rsp, 24
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
+test "print a signed float" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source = "(fn main :args () :ret i64 :body (print 12.345))";
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte15: db "%f", 10, 0
+        \\quad_word14: dq 12.345
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word14]
+        \\    mov rdi, byte15
+        \\    sub rsp, 8
+        \\    call _printf
         \\    add rsp, 8
         \\    mov rdi, rax
         \\    mov rax, 0x02000001
         \\    syscall
     );
 }
-
-// test "print signed integer after addition" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn main :args () :ret i64
-//         \\  :body
-//         \\  (const a 10)
-//         \\  (const b 20)
-//         \\  (const c (+ a b))
-//         \\  (print c))
-//     ;
-//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-//     defer interned_strings.deinit();
-//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-//     defer ast.deinit();
-//     var ir = try lang.lower(&gpa.allocator, ast);
-//     defer ir.deinit();
-//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
-//     defer x86.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
-//     defer x86_string.deinit();
-//     std.testing.expectEqualStrings(x86_string.slice(),
-//         \\    global _main
-//         \\    extern _printf
-//         \\
-//         \\    section .data
-//         \\
-//         \\byte20: db "%ld", 10, 0
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    mov rax, 10
-//         \\    mov rcx, 20
-//         \\    add rax, rcx
-//         \\    sub rsp, 8
-//         \\    mov rbx, rax
-//         \\    mov r12, rcx
-//         \\    mov rsi, rbx
-//         \\    mov rdi, byte20
-//         \\    call _printf
-//         \\    add rsp, 8
-//         \\    mov rdi, rax
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     );
-// }
-
-// test "print a signed float" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source = "(fn main :args () :ret i64 :body (print 12.345))";
-//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-//     defer interned_strings.deinit();
-//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-//     defer ast.deinit();
-//     var ir = try lang.lower(&gpa.allocator, ast);
-//     defer ir.deinit();
-//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
-//     defer x86.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
-//     defer x86_string.deinit();
-//     std.testing.expectEqualStrings(x86_string.slice(),
-//         \\    global _main
-//         \\    extern _printf
-//         \\
-//         \\    section .data
-//         \\
-//         \\byte16: db "%f", 10, 0
-//         \\quad_word14: dq 12.345
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    sub rsp, 8
-//         \\    movsd xmm0, [rel quad_word14]
-//         \\    mov rdi, byte16
-//         \\    call _printf
-//         \\    add rsp, 8
-//         \\    mov rdi, rax
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     );
-// }
 
 // test "print signed float after addition" {
 //     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
