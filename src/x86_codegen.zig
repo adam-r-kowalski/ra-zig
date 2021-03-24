@@ -286,7 +286,15 @@ fn moveEntityToSseRegister(context: Context, entity: Entity) !Register {
         assert(storage.kind == .SseRegister);
         return @intCast(Register, storage.value);
     }
-    const value = context.overload.entities.values.get(entity).?;
+    const value = blk: {
+        if (context.overload.entities.kinds.get(entity).? == .Int) {
+            const index = context.overload.entities.values.get(entity).?;
+            const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{context.interned_strings.data.items[index]});
+            break :blk try intern(context.interned_strings, buffer);
+        } else {
+            break :blk context.overload.entities.values.get(entity).?;
+        }
+    };
     const register = try freeUpSseRegister(context);
     try context.x86.quad_words.insert(value);
     try opSseRegRelQuadWord(context, .Movsd, register, value);
@@ -444,7 +452,15 @@ fn codegenPrintF64(context: Context, call: Call) !void {
         assert(storage.kind == .SseRegister);
         try opSseRegSseReg(context, .Movsd, 0, @intCast(Register, storage.value));
     } else {
-        const value = context.overload.entities.values.get(entity).?;
+        const value = blk: {
+            if (context.overload.entities.kinds.get(entity).? == .Int) {
+                const index = context.overload.entities.values.get(entity).?;
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{context.interned_strings.data.items[index]});
+                break :blk try intern(context.interned_strings, buffer);
+            } else {
+                break :blk context.overload.entities.values.get(entity).?;
+            }
+        };
         try context.x86.quad_words.insert(value);
         try opSseRegRelQuadWord(context, .Movsd, 0, value);
     }

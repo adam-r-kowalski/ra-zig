@@ -389,13 +389,13 @@ test "binary op between two signed floats left is comptime int" {
             \\
             \\    section .data
             \\
-            \\quad_word15: dq 10
+            \\quad_word20: dq 10.0
             \\quad_word17: dq 30.5
             \\
             \\    section .text
             \\
             \\_main:
-            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm0, [rel quad_word20]
             \\    movsd xmm1, [rel quad_word17]
             \\    movsd xmm2, xmm0
             \\    {s} xmm0, xmm1
@@ -439,14 +439,14 @@ test "binary op between two signed floats right is comptime int" {
             \\
             \\    section .data
             \\
+            \\quad_word20: dq 10.0
             \\quad_word15: dq 30.5
-            \\quad_word17: dq 10
             \\
             \\    section .text
             \\
             \\_main:
             \\    movsd xmm0, [rel quad_word15]
-            \\    movsd xmm1, [rel quad_word17]
+            \\    movsd xmm1, [rel quad_word20]
             \\    movsd xmm2, xmm0
             \\    {s} xmm0, xmm1
             \\    mov rdi, 0
