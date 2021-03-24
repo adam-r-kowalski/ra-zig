@@ -137,6 +137,18 @@ fn opRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opSseRegQuadWordPtr(context: Context, register: Register, offset: usize) !void {
+    _ = try context.x86_block.instructions.insert(.Mov);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .SseRegister;
+    operand_kinds[1] = .QuadWordPtr;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = register;
+    operands[1] = offset;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opSseRegRelQuadWord(context: Context, op: Instruction, to: Register, quad_word: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
@@ -159,6 +171,16 @@ fn opReg(context: Context, op: Instruction, reg: Register) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opSseReg(context: Context, op: Instruction, reg: Register) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
+    operand_kinds[0] = .SseRegister;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
+    operands[0] = reg;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opNoArgs(x86_block: *X86Block, op: Instruction) !void {
     _ = try x86_block.instructions.insert(op);
     _ = try x86_block.operand_kinds.insert(&.{});
@@ -172,11 +194,25 @@ fn ensureRegisterPreserved(context: Context, register: Register) !void {
     context.memory.preserved[register] = context.memory.stack;
 }
 
+fn ensureSseRegisterPreserved(context: Context, register: Register) !void {
+    if (context.memory.sse_preserved[register]) |_| return;
+    try opSseReg(context, .Push, register);
+    context.memory.stack += 8;
+    context.memory.sse_preserved[register] = context.memory.stack;
+}
+
 fn restorePreservedRegisters(context: Context) !void {
     for ([_]Register{ B, 12, 13, 14, 15 }) |register| {
         if (context.memory.preserved[register]) |offset| {
             try opRegQuadWordPtr(context, register, offset);
             context.memory.preserved[register] = null;
+        }
+    }
+    var register: u8 = 8;
+    while (register < 16) : (register += 1) {
+        if (context.memory.sse_preserved[register]) |offset| {
+            try opSseRegQuadWordPtr(context, register, offset);
+            context.memory.sse_preserved[register] = null;
         }
     }
 }
@@ -309,7 +345,30 @@ fn preserveVolatleRegisters(context: Context) !void {
         try opRegReg(context, .Mov, stable_register, volatle_register);
         registers.stored_entity[volatle_register] = null;
     }
-    context.memory.registers.volatle.head = 0;
+    registers.volatle.head = 0;
+
+    const sse_registers = &context.memory.sse_registers;
+    for (sse_registers.volatle.data[0..sse_registers.volatle.head]) |volatle_register| {
+        const volatle_entity = sse_registers.stored_entity[volatle_register].?;
+        const stable_register = blk: {
+            if (popFreeRegister(sse_registers.stable.data.len, &sse_registers.stable)) |stable_register| {
+                try ensureSseRegisterPreserved(context, stable_register);
+                break :blk stable_register;
+            } else {
+                const stable_register = sse_registers.stable.data[0];
+                try opSseReg(context, .Push, stable_register);
+                context.memory.stack += 8;
+                const stable_entity = sse_registers.stored_entity[stable_register].?;
+                try context.memory.storage_for_entity.put(stable_entity, Storage{ .kind = .Stack, .value = context.memory.stack });
+                break :blk stable_register;
+            }
+        };
+        try context.memory.storage_for_entity.put(volatle_entity, Storage{ .kind = .SseRegister, .value = stable_register });
+        sse_registers.stored_entity[stable_register] = volatle_entity;
+        try opSseRegSseReg(context, .Movsd, stable_register, volatle_register);
+        sse_registers.stored_entity[volatle_register] = null;
+    }
+    sse_registers.volatle.head = 0;
 }
 
 const Offset = struct {
@@ -366,7 +425,7 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     try preserveVolatleRegisters(context);
     const entity = call.argument_entities[0];
     if (context.memory.storage_for_entity.get(entity)) |storage| {
-        assert(storage.kind == .Register);
+        assert(storage.kind == .SseRegister);
         try opSseRegSseReg(context, .Movsd, 0, @intCast(Register, storage.value));
     } else {
         const value = context.overload.entities.values.get(entity).?;

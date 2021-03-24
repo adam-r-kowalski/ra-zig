@@ -115,6 +115,7 @@ pub const Memory = struct {
     sse_registers: SseRegisters,
     storage_for_entity: Map(Entity, Storage),
     preserved: [16]?usize,
+    sse_preserved: [16]?usize,
     stack: usize,
 };
 
@@ -144,6 +145,7 @@ pub fn initMemory(allocator: *Allocator) Memory {
         },
         .storage_for_entity = Map(Entity, Storage).init(allocator),
         .preserved = [_]?usize{null} ** 16,
+        .sse_preserved = [_]?usize{null} ** 16,
         .stack = 0,
     };
 }

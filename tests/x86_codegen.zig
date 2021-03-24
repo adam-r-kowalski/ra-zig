@@ -780,53 +780,60 @@ test "print a signed float" {
     );
 }
 
-// test "print signed float after addition" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn main :args () :ret i64
-//         \\  :body
-//         \\  (const a 10.4)
-//         \\  (const b 20.5)
-//         \\  (const c (+ a b))
-//         \\  (print c))
-//     ;
-//     var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-//     defer interned_strings.deinit();
-//     var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-//     defer ast.deinit();
-//     var ir = try lang.lower(&gpa.allocator, ast);
-//     defer ir.deinit();
-//     var x86 = try lang.codegen(allocator, ir, &interned_strings);
-//     defer x86.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, interned_strings);
-//     defer x86_string.deinit();
-//     std.testing.expectEqualStrings(x86_string.slice(),
-//         \\    global _main
-//         \\    extern _printf
-//         \\
-//         \\    section .data
-//         \\
-//         \\byte20: db "%f", 10, 0
-//         \\quad_word15: dq 10.4
-//         \\quad_word17: dq 20.5
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    movsd xmm0, [rel quad_word15]
-//         \\    movsd xmm1, [rel quad_word17]
-//         \\    addsd xmm0, xmm1
-//         \\    sub rsp, 8
-//         \\    movsd xmm8, xmm0
-//         \\    movsd xmm9, xmm1
-//         \\    movsd xmm0, xmm8
-//         \\    mov rdi, byte20
-//         \\    call _printf
-//         \\    add rsp, 8
-//         \\    mov rdi, rax
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     );
-// }
+test "print signed float after addition" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a 10.4)
+        \\  (const b 20.5)
+        \\  (const c (+ a b))
+        \\  (print c))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte19: db "%f", 10, 0
+        \\quad_word15: dq 10.4
+        \\quad_word17: dq 20.5
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm1, [rel quad_word17]
+        \\    movsd xmm2, xmm0
+        \\    addsd xmm0, xmm1
+        \\    push xmm8
+        \\    movsd xmm8, xmm0
+        \\    push xmm9
+        \\    movsd xmm9, xmm1
+        \\    push xmm10
+        \\    movsd xmm10, xmm2
+        \\    movsd xmm0, xmm8
+        \\    mov rdi, byte19
+        \\    call _printf
+        \\    mov rdi, rax
+        \\    mov xmm8, qword [rbp-8]
+        \\    mov xmm9, qword [rbp-16]
+        \\    mov xmm10, qword [rbp-24]
+        \\    add rsp, 24
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
