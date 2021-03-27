@@ -270,8 +270,17 @@ fn returnRegisterForUse(context: Context, register: Register) void {
 
 fn moveEntityToRegister(context: Context, entity: Entity) !Register {
     if (context.memory.storage_for_entity.get(entity)) |storage| {
-        assert(storage.kind == .Register);
-        return @intCast(Register, storage.value);
+        switch (storage.kind) {
+            .Register => return @intCast(Register, storage.value),
+            .Stack => {
+                const register = try freeUpRegister(context);
+                try opRegQuadWordPtr(context, .Mov, register, storage.value);
+                try context.memory.storage_for_entity.put(entity, Storage{ .kind = .Register, .value = register });
+                context.memory.registers.stored_entity[register] = entity;
+                return register;
+            },
+            else => unreachable,
+        }
     }
     const value = context.overload.entities.values.get(entity).?;
     const register = try freeUpRegister(context);
@@ -415,8 +424,11 @@ fn codegenPrintI64(context: Context, call: Call) !void {
     try preserveVolatleRegisters(context);
     const entity = call.argument_entities[0];
     if (context.memory.storage_for_entity.get(entity)) |storage| {
-        assert(storage.kind == .Register);
-        try opRegReg(context, .Mov, SI, @intCast(Register, storage.value));
+        switch (storage.kind) {
+            .Register => try opRegReg(context, .Mov, SI, @intCast(Register, storage.value)),
+            .Stack => try opRegQuadWordPtr(context, .Mov, SI, storage.value),
+            else => unreachable,
+        }
     } else {
         const value = context.overload.entities.values.get(entity).?;
         try opRegLiteral(context, .Mov, SI, value);
@@ -424,6 +436,7 @@ fn codegenPrintI64(context: Context, call: Call) !void {
     const format_string = try intern(context.interned_strings, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, DI, format_string);
+    try opRegReg(context, .Xor, A, A);
     const offset = try alignStackTo16Bytes(context);
     const printf = try intern(context.interned_strings, "_printf");
     try context.x86.externs.insert(printf);
@@ -467,6 +480,8 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     const format_string = try intern(context.interned_strings, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, DI, format_string);
+    const one = try intern(context.interned_strings, "1");
+    try opRegLiteral(context, .Mov, A, one);
     const offset = try alignStackTo16Bytes(context);
     const printf = try intern(context.interned_strings, "_printf");
     try context.x86.externs.insert(printf);
@@ -756,7 +771,7 @@ fn resetStack(context: Context) !void {
     try opRegLiteral(context, .Add, SP, interned);
 }
 
-fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
+fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
     var arena = Arena.init(x86.arena.child_allocator);
     defer arena.deinit();
     const name = interned_strings.mapping.get("main").?;
@@ -782,6 +797,7 @@ fn main(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
         .memory = &memory,
         .interned_strings = interned_strings,
     };
+    try opRegReg(context, .Mov, BP, SP);
     for (context.ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
             .Return => {
@@ -817,7 +833,7 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings
         .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
-    try main(&x86, ir, interned_strings);
+    try codegenMain(&x86, ir, interned_strings);
     return x86;
 }
 
@@ -843,6 +859,7 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Mulsd => try output.insertSlice("mulsd"),
         .Idiv => try output.insertSlice("idiv"),
         .Divsd => try output.insertSlice("divsd"),
+        .Xor => try output.insertSlice("xor"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
         .Cqo => try output.insertSlice("cqo"),

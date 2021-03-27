@@ -29,6 +29,7 @@ test "trivial" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rdi, 42
         \\    mov rax, 0x02000001
         \\    syscall
@@ -67,6 +68,7 @@ test "binary op between two signed integers" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    mov rax, 10
             \\    mov rcx, 15
             \\    mov rdx, rax
@@ -113,6 +115,7 @@ test "binary op between three signed integers" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    mov rax, 10
             \\    mov rcx, 15
             \\    mov rdx, rax
@@ -157,6 +160,7 @@ test "divide two signed integers" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rax, 20
         \\    mov r11, 4
         \\    mov rcx, rax
@@ -197,6 +201,7 @@ test "divide two signed integers where lhs is not in rax" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rax, 2
         \\    mov rcx, 3
         \\    mov rdx, rax
@@ -243,6 +248,7 @@ test "binary operators on signed integers" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rax, 10
         \\    mov rcx, 7
         \\    mov rdx, rax
@@ -295,6 +301,7 @@ test "denominator of division cannot be rdx" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rax, 2
         \\    mov rcx, 3
         \\    mov rdx, rax
@@ -345,6 +352,7 @@ test "binary op between two signed floats" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word15]
             \\    movsd xmm1, [rel quad_word17]
             \\    movsd xmm2, xmm0
@@ -395,6 +403,7 @@ test "binary op between two signed floats left is comptime int" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word20]
             \\    movsd xmm1, [rel quad_word17]
             \\    movsd xmm2, xmm0
@@ -445,6 +454,7 @@ test "binary op between two signed floats right is comptime int" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word15]
             \\    movsd xmm1, [rel quad_word20]
             \\    movsd xmm2, xmm0
@@ -497,6 +507,7 @@ test "binary op between three signed floats" {
             \\    section .text
             \\
             \\_main:
+            \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word15]
             \\    movsd xmm1, [rel quad_word17]
             \\    movsd xmm2, xmm0
@@ -545,8 +556,10 @@ test "print a signed integer" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rsi, 12345
         \\    mov rdi, byte16
+        \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -591,8 +604,10 @@ test "print three signed integer" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rsi, 10
         \\    mov rdi, byte20
+        \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -600,11 +615,13 @@ test "print three signed integer" {
         \\    mov rbx, rax
         \\    mov rsi, 20
         \\    mov rdi, byte20
+        \\    xor rax, rax
         \\    call _printf
         \\    push r12
         \\    mov r12, rax
         \\    mov rsi, 30
         \\    mov rdi, byte20
+        \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -654,8 +671,10 @@ test "print four signed integer" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rsi, 10
         \\    mov rdi, byte21
+        \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -663,11 +682,13 @@ test "print four signed integer" {
         \\    mov rbx, rax
         \\    mov rsi, 20
         \\    mov rdi, byte21
+        \\    xor rax, rax
         \\    call _printf
         \\    push r12
         \\    mov r12, rax
         \\    mov rsi, 30
         \\    mov rdi, byte21
+        \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -675,6 +696,7 @@ test "print four signed integer" {
         \\    mov r13, rax
         \\    mov rsi, 30
         \\    mov rdi, byte21
+        \\    xor rax, rax
         \\    call _printf
         \\    mov rdi, rax
         \\    mov rbx, qword [rbp-8]
@@ -719,6 +741,7 @@ test "print signed integer after addition" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    mov rax, 10
         \\    mov rcx, 20
         \\    mov rdx, rax
@@ -731,6 +754,7 @@ test "print signed integer after addition" {
         \\    mov r13, rdx
         \\    mov rsi, rbx
         \\    mov rdi, byte19
+        \\    xor rax, rax
         \\    call _printf
         \\    mov rdi, rax
         \\    mov rbx, qword [rbp-8]
@@ -769,8 +793,10 @@ test "print a signed float" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word14]
         \\    mov rdi, byte15
+        \\    mov rax, 1
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
@@ -815,6 +841,7 @@ test "print signed float after addition" {
         \\    section .text
         \\
         \\_main:
+        \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word15]
         \\    movsd xmm1, [rel quad_word17]
         \\    movsd xmm2, xmm0
@@ -830,6 +857,7 @@ test "print signed float after addition" {
         \\    movsd xmm10, xmm2
         \\    movsd xmm0, xmm8
         \\    mov rdi, byte20
+        \\    mov rax, 1
         \\    call _printf
         \\    mov rdi, rax
         \\    movsd xmm8, qword [rbp-8]

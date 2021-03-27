@@ -53,6 +53,7 @@ pub const Instruction = enum(u8) {
     Mulsd,
     Idiv,
     Divsd,
+    Xor,
     Call,
     Syscall,
     Cqo,
