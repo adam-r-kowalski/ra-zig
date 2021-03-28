@@ -7,37 +7,42 @@ const Set = @import("set.zig").Set;
 const InternedString = @import("interned_strings.zig").InternedString;
 const Entity = @import("ir.zig").Entity;
 
-pub const StorageKind = enum(u8) {
-    Register,
-    SseRegister,
-    Stack,
+pub const Register = enum(usize) {
+    Rax,
+    Rbx,
+    Rcx,
+    Rdx,
+    Rsp,
+    Rbp,
+    Rsi,
+    Rdi,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
 };
 
-pub const Storage = struct {
-    kind: StorageKind,
-    value: usize,
-};
-
-pub const A = 0;
-pub const C = 1;
-pub const D = 2;
-pub const B = 3;
-pub const SP = 4;
-pub const BP = 5;
-pub const SI = 6;
-pub const DI = 7;
-
-pub const Register = u8;
-
-pub const RegisterKind = enum { Volatle, Stable };
-
-pub const register_kind = blk: {
-    var array: [16]RegisterKind = undefined;
-    for ([_]Register{ A, C, D, SP, BP, SI, DI, 8, 9, 10, 11 }) |register|
-        array[register] = .Volatle;
-    for ([_]Register{ B, 12, 13, 14, 15 }) |register|
-        array[register] = .Stable;
-    break :blk array;
+pub const SseRegister = enum(usize) {
+    Xmm0,
+    Xmm1,
+    Xmm2,
+    Xmm3,
+    Xmm4,
+    Xmm5,
+    Xmm6,
+    Xmm7,
+    Xmm8,
+    Xmm9,
+    Xmm10,
+    Xmm11,
+    Xmm12,
+    Xmm13,
+    Xmm14,
+    Xmm15,
 };
 
 pub const Instruction = enum(u8) {
@@ -69,7 +74,7 @@ pub const Kind = enum(u8) {
     Byte,
     QuadWord,
     RelativeQuadWord,
-    QuadWordPtr,
+    StackOffset,
 };
 
 pub const Block = struct {
@@ -92,61 +97,7 @@ pub const X86 = struct {
     }
 };
 
-pub fn RegisterStack(comptime n: Register) type {
-    return struct {
-        data: [n]Register,
-        head: Register,
-    };
-}
-
-pub const Registers = struct {
-    stored_entity: [16]?Entity,
-    volatle: RegisterStack(9),
-    stable: RegisterStack(5),
+pub const Stack = struct {
+    entity: Map(Entity, usize),
+    top: usize,
 };
-
-pub const SseRegisters = struct {
-    stored_entity: [16]?Entity,
-    volatle: RegisterStack(8),
-    stable: RegisterStack(8),
-};
-
-pub const Memory = struct {
-    registers: Registers,
-    sse_registers: SseRegisters,
-    storage_for_entity: Map(Entity, Storage),
-    preserved: [16]?usize,
-    sse_preserved: [16]?usize,
-    stack: usize,
-};
-
-pub fn initMemory(allocator: *Allocator) Memory {
-    return Memory{
-        .registers = Registers{
-            .stored_entity = [_]?Entity{null} ** 16,
-            .volatle = RegisterStack(9){
-                .data = [_]Register{ A, C, D, SI, DI, 8, 9, 10, 11 },
-                .head = 0,
-            },
-            .stable = RegisterStack(5){
-                .data = [_]Register{ B, 12, 13, 14, 15 },
-                .head = 0,
-            },
-        },
-        .sse_registers = SseRegisters{
-            .stored_entity = [_]?Entity{null} ** 16,
-            .volatle = RegisterStack(8){
-                .data = [_]Register{ 0, 1, 2, 3, 4, 5, 6, 7 },
-                .head = 0,
-            },
-            .stable = RegisterStack(8){
-                .data = [_]Register{ 8, 9, 10, 11, 12, 13, 14, 15 },
-                .head = 0,
-            },
-        },
-        .storage_for_entity = Map(Entity, Storage).init(allocator),
-        .preserved = [_]?usize{null} ** 16,
-        .sse_preserved = [_]?usize{null} ** 16,
-        .stack = 0,
-    };
-}
