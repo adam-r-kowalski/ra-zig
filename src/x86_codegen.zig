@@ -633,9 +633,21 @@ fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
         try context.stack.entity.putNoClobber(entity, offset);
         const eight = try internInt(context, 8);
         try opRegLiteral(context, .Sub, .Rsp, eight);
-        try context.x86.quad_words.insert(value);
-        try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
-        try opStackSseReg(context, .Movsd, offset, .Xmm0);
+        switch (context.overload.entities.kinds.get(entity).?) {
+            .Int => {
+                const interned = context.interned_strings.data.items[value];
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
+                const quad_word = try internString(context.interned_strings, buffer);
+                try context.x86.quad_words.insert(quad_word);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, quad_word);
+                try opStackSseReg(context, .Movsd, offset, .Xmm0);
+            },
+            .Float => {
+                try context.x86.quad_words.insert(value);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
+                try opStackSseReg(context, .Movsd, offset, .Xmm0);
+            },
+        }
         return offset;
     }
     unreachable;
