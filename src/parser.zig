@@ -8,7 +8,7 @@ const Kind = data.ast.Kind;
 const Source = data.ast.Source;
 const InternedStrings = data.interned_strings.InternedStrings;
 const Strings = data.interned_strings.Strings;
-const intern = data.interned_strings.intern;
+const internString = data.interned_strings.internString;
 const List = data.List;
 const Map = data.Map;
 
@@ -20,7 +20,7 @@ fn reservedChar(char: u8) bool {
 }
 
 fn insert(kind: Kind, ast: *Ast, interned_strings: *InternedStrings, source: *Source, length: usize) !usize {
-    const string_index = try intern(interned_strings, source.input[0..length]);
+    const string_index = try internString(interned_strings, source.input[0..length]);
     const kind_index = try ast.kinds.insert(kind);
     _ = try ast.indices.insert(string_index);
     source.input = source.input[length..];

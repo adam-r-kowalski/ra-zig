@@ -18,7 +18,7 @@ pub const InternedStrings = struct {
     }
 };
 
-pub fn intern(interned_strings: *InternedStrings, string: []const u8) !InternedString {
+pub fn internString(interned_strings: *InternedStrings, string: []const u8) !InternedString {
     const result = try interned_strings.mapping.getOrPut(string);
     if (result.found_existing)
         return result.entry.value;
@@ -53,18 +53,18 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
         .data = List([]const u8).init(&arena.allocator),
         .mapping = Map([]const u8, InternedString).init(&arena.allocator),
     };
-    _ = try intern(&interned_strings, "fn");
-    _ = try intern(&interned_strings, ":args");
-    _ = try intern(&interned_strings, ":ret");
-    _ = try intern(&interned_strings, ":body");
-    _ = try intern(&interned_strings, "if");
-    _ = try intern(&interned_strings, "const");
-    _ = try intern(&interned_strings, "i64");
-    _ = try intern(&interned_strings, "f64");
-    _ = try intern(&interned_strings, "+");
-    _ = try intern(&interned_strings, "-");
-    _ = try intern(&interned_strings, "*");
-    _ = try intern(&interned_strings, "/");
-    _ = try intern(&interned_strings, "print");
+    _ = try internString(&interned_strings, "fn");
+    _ = try internString(&interned_strings, ":args");
+    _ = try internString(&interned_strings, ":ret");
+    _ = try internString(&interned_strings, ":body");
+    _ = try internString(&interned_strings, "if");
+    _ = try internString(&interned_strings, "const");
+    _ = try internString(&interned_strings, "i64");
+    _ = try internString(&interned_strings, "f64");
+    _ = try internString(&interned_strings, "+");
+    _ = try internString(&interned_strings, "-");
+    _ = try internString(&interned_strings, "*");
+    _ = try internString(&interned_strings, "/");
+    _ = try internString(&interned_strings, "print");
     return interned_strings;
 }
