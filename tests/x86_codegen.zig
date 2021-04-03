@@ -722,3 +722,58 @@ test "print three signed floats" {
         \\    syscall
     );
 }
+
+test "function call" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x i64)) :ret i64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body (square 6))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\square(i64):
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, rdi
+        \\    mov rcx, rdi
+        \\    imul rax
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 6
+        \\    mov rdi, qword [rbp-8]
+        \\    call square(i64)
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}

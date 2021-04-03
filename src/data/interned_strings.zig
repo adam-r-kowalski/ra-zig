@@ -36,7 +36,9 @@ pub const Strings = enum(InternedString) {
     Body,
     If,
     Const,
+    Int,
     I64,
+    Float,
     F64,
     Add,
     Subtract,
@@ -59,7 +61,9 @@ pub fn prime(allocator: *Allocator) !InternedStrings {
     _ = try internString(&interned_strings, ":body");
     _ = try internString(&interned_strings, "if");
     _ = try internString(&interned_strings, "const");
+    _ = try internString(&interned_strings, "int");
     _ = try internString(&interned_strings, "i64");
+    _ = try internString(&interned_strings, "float");
     _ = try internString(&interned_strings, "f64");
     _ = try internString(&interned_strings, "+");
     _ = try internString(&interned_strings, "-");
