@@ -190,14 +190,14 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, childre
     assert(children.len == 1);
     const ast_entity = children[0];
     var parameters = astChildren(ast, .Parens, ast_entity);
-    const parameter_names = try allocator.alloc(usize, parameters.len);
+    const parameter_entities = try allocator.alloc(Entity, parameters.len);
     const parameter_type_block_indices = try allocator.alloc(usize, parameters.len);
     var i: usize = 0;
     while (i < parameters.len) : (i += 1) {
         const parameter = astChildren(ast, .Parens, parameters[i]);
         const parameter_name = astIndex(ast, .Symbol, parameter[0]);
-        parameter_names[i] = parameter_name;
         const entity = overload.entities.next_entity;
+        parameter_entities[i] = entity;
         overload.entities.next_entity += 1;
         try overload.entities.names.putNoClobber(entity, parameter_name);
         try overload.scopes.items[@enumToInt(Scopes.Function)].name_to_entity.putNoClobber(parameter_name, entity);
@@ -213,7 +213,7 @@ fn lowerParameters(allocator: *Allocator, overload: *Overload, ast: Ast, childre
         const return_index = try block.returns.insert(type_entity);
         _ = try block.indices.insert(return_index);
     }
-    overload.parameter_names = parameter_names;
+    overload.parameter_entities = parameter_entities;
     overload.parameter_type_block_indices = parameter_type_block_indices;
 }
 
@@ -329,10 +329,10 @@ pub fn lower(allocator: *Allocator, ast: Ast) !Ir {
 
 fn writeParameterName(output: *List(u8), overload: Overload, interned_strings: InternedStrings) !void {
     try output.insertSlice("\n  :parameter-names (");
-    if (overload.parameter_names.len == 0) return;
-    const last = overload.parameter_names.len - 1;
-    for (overload.parameter_names) |parameter_name, i| {
-        try output.insertSlice(interned_strings.data.items[parameter_name]);
+    if (overload.parameter_entities.len == 0) return;
+    const last = overload.parameter_entities.len - 1;
+    for (overload.parameter_entities) |parameter_entity, i| {
+        try output.insertSlice(interned_strings.data.items[overload.entities.names.get(parameter_entity).?]);
         if (i < last)
             _ = try output.insert(' ');
     }

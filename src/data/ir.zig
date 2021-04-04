@@ -64,7 +64,7 @@ pub const Block = struct {
     active_scopes: []const usize,
     kinds: List(ExpressionKind),
     indices: List(usize),
-    returns: List(usize),
+    returns: List(Entity),
     calls: List(Call),
     branches: List(Branch),
     phis: List(Phi),
@@ -79,7 +79,7 @@ pub const Entities = struct {
 };
 
 pub const Overload = struct {
-    parameter_names: []const InternedString,
+    parameter_entities: []const InternedString,
     parameter_type_block_indices: []const usize,
     return_type_block_index: usize,
     body_block_index: usize,

@@ -221,18 +221,18 @@ test "binary op between two signed floats" {
             \\
             \\    section .data
             \\
-            \\quad_word15: dq 10.3
-            \\quad_word17: dq 30.5
+            \\quad_word19: dq 30.5
+            \\quad_word17: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm0, [rel quad_word17]
             \\    movsd qword [rbp-8], xmm0
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word17]
+            \\    movsd xmm0, [rel quad_word19]
             \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
             \\    movsd xmm1, qword [rbp-16]
@@ -279,18 +279,18 @@ test "binary op between signed float and comptime int" {
             \\
             \\    section .data
             \\
-            \\quad_word21: dq 30.0
-            \\quad_word15: dq 10.3
+            \\quad_word23: dq 30.0
+            \\quad_word17: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm0, [rel quad_word17]
             \\    movsd qword [rbp-8], xmm0
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word21]
+            \\    movsd xmm0, [rel quad_word23]
             \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
             \\    movsd xmm1, qword [rbp-16]
@@ -337,18 +337,18 @@ test "binary op between comptime int and signed float" {
             \\
             \\    section .data
             \\
-            \\quad_word21: dq 10.0
-            \\quad_word17: dq 30.5
+            \\quad_word23: dq 10.0
+            \\quad_word19: dq 30.5
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word21]
+            \\    movsd xmm0, [rel quad_word23]
             \\    movsd qword [rbp-8], xmm0
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word17]
+            \\    movsd xmm0, [rel quad_word19]
             \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
             \\    movsd xmm1, qword [rbp-16]
@@ -396,19 +396,19 @@ test "binary op between three signed floats" {
             \\
             \\    section .data
             \\
-            \\quad_word20: dq 40.2
-            \\quad_word15: dq 10.3
-            \\quad_word17: dq 30.5
+            \\quad_word19: dq 30.5
+            \\quad_word22: dq 40.2
+            \\quad_word17: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word15]
+            \\    movsd xmm0, [rel quad_word17]
             \\    movsd qword [rbp-8], xmm0
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word17]
+            \\    movsd xmm0, [rel quad_word19]
             \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
             \\    movsd xmm1, qword [rbp-16]
@@ -416,7 +416,7 @@ test "binary op between three signed floats" {
             \\    sub rsp, 8
             \\    movsd qword [rbp-24], xmm0
             \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word20]
+            \\    movsd xmm0, [rel quad_word22]
             \\    movsd qword [rbp-32], xmm0
             \\    movsd xmm0, qword [rbp-24]
             \\    movsd xmm1, qword [rbp-32]
@@ -459,7 +459,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\byte17: db "%ld", 10, 0
+        \\byte19: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -468,7 +468,7 @@ test "print a signed integer" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], 12345
         \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte17
+        \\    mov rdi, byte19
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -509,7 +509,7 @@ test "print three signed integers" {
         \\
         \\    section .data
         \\
-        \\byte21: db "%ld", 10, 0
+        \\byte23: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -518,7 +518,7 @@ test "print three signed integers" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], 10
         \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -526,7 +526,7 @@ test "print three signed integers" {
         \\    sub rsp, 8
         \\    mov qword [rbp-24], 20
         \\    mov rsi, qword [rbp-24]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -534,7 +534,7 @@ test "print three signed integers" {
         \\    sub rsp, 8
         \\    mov qword [rbp-40], 30
         \\    mov rsi, qword [rbp-40]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -574,7 +574,7 @@ test "align stack before calling print" {
         \\
         \\    section .data
         \\
-        \\byte21: db "%ld", 10, 0
+        \\byte23: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -595,7 +595,7 @@ test "align stack before calling print" {
         \\    sub rsp, 8
         \\    mov qword [rbp-32], rax
         \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
@@ -629,18 +629,18 @@ test "print a signed float" {
         \\
         \\    section .data
         \\
-        \\byte16: db "%f", 10, 0
-        \\quad_word14: dq 12.345
+        \\byte18: db "%f", 10, 0
+        \\quad_word16: dq 12.345
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
         \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word14]
+        \\    movsd xmm0, [rel quad_word16]
         \\    movsd qword [rbp-8], xmm0
         \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte16
+        \\    mov rdi, byte18
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
@@ -681,38 +681,38 @@ test "print three signed floats" {
         \\
         \\    section .data
         \\
-        \\byte21: db "%f", 10, 0
-        \\quad_word19: dq 35.7
-        \\quad_word15: dq 10.2
-        \\quad_word17: dq 21.4
+        \\byte23: db "%f", 10, 0
+        \\quad_word21: dq 35.7
+        \\quad_word19: dq 21.4
+        \\quad_word17: dq 10.2
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
         \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word15]
+        \\    movsd xmm0, [rel quad_word17]
         \\    movsd qword [rbp-8], xmm0
         \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word17]
+        \\    movsd xmm0, [rel quad_word19]
         \\    movsd qword [rbp-24], xmm0
         \\    movsd xmm0, qword [rbp-24]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-32], rax
         \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word19]
+        \\    movsd xmm0, [rel quad_word21]
         \\    movsd qword [rbp-40], xmm0
         \\    movsd xmm0, qword [rbp-40]
-        \\    mov rdi, byte21
+        \\    mov rdi, byte23
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
@@ -720,5 +720,60 @@ test "print three signed floats" {
         \\    mov rdi, qword [rbp-48]
         \\    mov rax, 0x02000001
         \\    syscall
+    );
+}
+
+test "user defined function single int" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x i64)) :ret i64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body (square 6))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 6
+        \\    mov rdi, qword [rbp-8]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    mov rcx, qword [rbp-8]
+        \\    imul rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
     );
 }
