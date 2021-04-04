@@ -21,6 +21,7 @@ const Stack = data.x86.Stack;
 const Register = data.x86.Register;
 const SseRegister = data.x86.SseRegister;
 const Kind = data.x86.Kind;
+const BlockIndex = data.x86.BlockIndex;
 const List = data.List;
 const Map = data.Map;
 const Set = data.Set;
@@ -63,6 +64,16 @@ fn opLiteral(context: Context, op: Instruction, lit: InternedString) !void {
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 1);
     operands[0] = lit;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
+fn opLabel(context: Context, op: Instruction, label: Label) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
+    operand_kinds[0] = .Label;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
+    operands[0] = label;
     _ = try context.x86_block.operands.insert(operands);
 }
 
@@ -461,9 +472,6 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
             const type_block_indices = overload.parameter_type_block_indices;
             assert(type_block_indices.len == call.argument_entities.len);
             const integer_argument_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
-            var overload_name = List(u8).init(context.allocator);
-            try overload_name.insertSlice(context.interned_strings.data.items[name]);
-            _ = try overload_name.insert('(');
             const parameter_entities = overload.parameter_entities;
             for (type_block_indices) |type_block_index, argument_index| {
                 assert(argument_index < integer_argument_registers.len);
@@ -477,19 +485,18 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
                 const offset = try entityStackOffset(context, argument_entity);
                 try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
-                try overload_name.insertSlice(context.interned_strings.data.items[nameOf(context, parameter_type).?]);
                 try context.x86.types.putNoClobber(parameter_entities[argument_index], parameter_type);
             }
-            _ = try overload_name.insert(')');
-            const interned_overload_name = try internString(context.interned_strings, overload_name.slice());
-            try opLiteral(context, .Call, interned_overload_name);
+
+            const x86_block_result = try context.x86.blocks.addOne();
+            try opLabel(context, .Call, x86_block_result.index);
             const eight = try internInt(context, 8);
             try opRegLiteral(context, .Sub, .Rsp, eight);
             context.stack.top += 8;
             try opStackReg(context, .Mov, context.stack.top, .Rax);
             try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
 
-            const x86_block = (try context.x86.blocks.addOne()).ptr;
+            const x86_block = x86_block_result.ptr;
             x86_block.instructions = List(Instruction).init(context.allocator);
             x86_block.operand_kinds = List([]const Kind).init(context.allocator);
             x86_block.operands = List([]const usize).init(context.allocator);
@@ -527,6 +534,8 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                             try opRegStack(overload_context, .Mov, .Rax, offset);
                         } else if (overload.entities.values.get(ret)) |value| {
                             try opRegLiteral(overload_context, .Mov, .Rax, value);
+                        } else {
+                            unreachable;
                         }
                         if (overload_context.stack.top > 0) {
                             const offset = try internInt(overload_context, overload_context.stack.top);

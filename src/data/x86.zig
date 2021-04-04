@@ -7,6 +7,8 @@ const Set = @import("set.zig").Set;
 const InternedString = @import("interned_strings.zig").InternedString;
 const Entity = @import("ir.zig").Entity;
 
+pub const BlockIndex = usize;
+
 pub const Register = enum(usize) {
     Rax,
     Rbx,
