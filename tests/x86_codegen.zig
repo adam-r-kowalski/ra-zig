@@ -777,3 +777,58 @@ test "user defined function single int" {
         \\    ret
     );
 }
+
+test "user defined function four ints" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
+        \\  :body (/ (- y2 y1) (- x2 x1)))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body (slope 0 10 5 20))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 6
+        \\    mov rdi, qword [rbp-8]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    mov rcx, qword [rbp-8]
+        \\    imul rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}

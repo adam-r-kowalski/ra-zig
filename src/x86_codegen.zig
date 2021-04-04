@@ -232,7 +232,7 @@ fn restoreStack(context: Context, offset: usize) !void {
 fn typeOf(context: Context, entity: Entity) !Entity {
     if (context.x86.types.get(entity)) |type_entity|
         return type_entity;
-    if (context.overload.entities.kinds.get(entity)) |kind| {
+    if (context.ir.entities.kinds.get(entity)) |kind| {
         const type_entity = @enumToInt(switch (kind) {
             .Int => Builtins.Int,
             .Float => Builtins.Float,
@@ -250,7 +250,7 @@ fn nameOf(context: Context, entity: Entity) ?InternedString {
         @enumToInt(Builtins.Float) => return @enumToInt(Strings.Float),
         @enumToInt(Builtins.F64) => return @enumToInt(Strings.F64),
         else => {
-            if (context.overload.entities.names.get(entity)) |name| return name;
+            if (context.ir.entities.names.get(entity)) |name| return name;
             return null;
         },
     }
@@ -322,7 +322,7 @@ fn entityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.overload.entities.values.get(entity)) |value| {
+    if (context.ir.entities.values.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
@@ -338,13 +338,13 @@ fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.overload.entities.values.get(entity)) |value| {
+    if (context.ir.entities.values.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
         const eight = try internInt(context, 8);
         try opRegLiteral(context, .Sub, .Rsp, eight);
-        switch (context.overload.entities.kinds.get(entity).?) {
+        switch (context.ir.entities.kinds.get(entity).?) {
             .Int => {
                 const interned = context.interned_strings.data.items[value];
                 const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
@@ -532,7 +532,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                         const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
                         if (stack.entity.get(ret)) |offset| {
                             try opRegStack(overload_context, .Mov, .Rax, offset);
-                        } else if (overload.entities.values.get(ret)) |value| {
+                        } else if (context.ir.entities.values.get(ret)) |value| {
                             try opRegLiteral(overload_context, .Mov, .Rax, value);
                         } else {
                             unreachable;
@@ -592,7 +592,7 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
                 if (stack.entity.get(ret)) |offset| {
                     try opRegStack(context, .Mov, .Rdi, offset);
-                } else if (overload.entities.values.get(ret)) |value| {
+                } else if (context.ir.entities.values.get(ret)) |value| {
                     try opRegLiteral(context, .Mov, .Rdi, value);
                 } else {
                     unreachable;
