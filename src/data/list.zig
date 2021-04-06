@@ -28,7 +28,7 @@ pub fn List(comptime T: type) type {
         fn ensureCapacity(self: *Self) !void {
             if (self.length < self.items.len)
                 return;
-            const capacity = std.math.max(self.items.len * 32, 2);
+            const capacity = std.math.max(self.items.len * 2, 32);
             const items = try self.allocator.alloc(T, capacity);
             for (self.items) |e, i| items[i] = e;
             self.allocator.free(self.items);

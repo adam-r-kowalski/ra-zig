@@ -2,5 +2,10 @@
   :body (/ (- y2 y1) (- x2 x1)))
 
 
+(fn square :args ((x i64)) :ret i64
+  :body (* x x))
+
+
 (fn main :args () :ret i64
-  :body (slope 0 10 0 20))
+  :body
+  (square (slope 5 10 10 30)))

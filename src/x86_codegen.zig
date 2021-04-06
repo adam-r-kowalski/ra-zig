@@ -487,7 +487,6 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
                 try context.x86.types.putNoClobber(parameter_entities[argument_index], parameter_type);
             }
-
             const x86_block_result = try context.x86.blocks.addOne();
             try opLabel(context, .Call, x86_block_result.index);
             const eight = try internInt(context, 8);
@@ -495,7 +494,11 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
             context.stack.top += 8;
             try opStackReg(context, .Mov, context.stack.top, .Rax);
             try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
-
+            const return_type_block = &overload.blocks.items[overload.return_type_block_index];
+            assert(return_type_block.kinds.length == 1);
+            assert(return_type_block.kinds.items[0] == .Return);
+            const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
+            try context.x86.types.putNoClobber(call.result_entity, return_type);
             const x86_block = x86_block_result.ptr;
             x86_block.instructions = List(Instruction).init(context.allocator);
             x86_block.operand_kinds = List([]const Kind).init(context.allocator);
@@ -553,9 +556,6 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
 }
 
 fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
-    // TODO(performance): Use this arena for temporary storage
-    var arena = Arena.init(x86.arena.child_allocator);
-    defer arena.deinit();
     const name = interned_strings.mapping.get("main").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
