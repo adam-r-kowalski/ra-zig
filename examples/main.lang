@@ -6,6 +6,18 @@
   :body (* x x))
 
 
+(fn mean :args ((x i64) (y i64)) :ret i64
+  :body (/ (+ x y) 2))
+
+
 (fn main :args () :ret i64
   :body
-  (square (slope 5 10 10 30)))
+  (const x1 5)
+  (const x2 10)
+  (const y1 15)
+  (const y2 30)
+  (const a (slope x1 x2 y1 y2))
+  (print a)
+  (const b (square a))
+  (print b)
+  (mean x2 y2))
