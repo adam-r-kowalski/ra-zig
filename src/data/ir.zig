@@ -85,7 +85,6 @@ pub const Overload = struct {
     body_block_index: usize,
     scopes: List(Scope),
     blocks: List(Block),
-    entities: Entities,
 };
 
 pub const Function = List(Overload);
@@ -100,6 +99,7 @@ pub const Ir = struct {
     names: List(InternedString),
     indices: List(usize),
     functions: List(Function),
+    entities: Entities,
     arena: *Arena,
 
     pub fn deinit(self: *@This()) void {

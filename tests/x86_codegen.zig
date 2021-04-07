@@ -777,3 +777,183 @@ test "user defined function single int" {
         \\    ret
     );
 }
+
+test "user defined function four ints" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
+        \\  :body (/ (- y2 y1) (- x2 x1)))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body (slope 0 10 5 20))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 0
+        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], 10
+        \\    mov rsi, qword [rbp-16]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], 5
+        \\    mov rdx, qword [rbp-24]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-32], 20
+        \\    mov rcx, qword [rbp-32]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-40], rax
+        \\    mov rdi, qword [rbp-40]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 32
+        \\    mov qword [rbp-8], rdi
+        \\    mov qword [rbp-16], rsi
+        \\    mov qword [rbp-24], rdx
+        \\    mov qword [rbp-32], rcx
+        \\    mov rax, qword [rbp-32]
+        \\    mov rcx, qword [rbp-24]
+        \\    sub rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-40], rax
+        \\    mov rax, qword [rbp-16]
+        \\    mov rcx, qword [rbp-8]
+        \\    sub rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-48], rax
+        \\    mov rax, qword [rbp-40]
+        \\    mov rcx, qword [rbp-48]
+        \\    cqo
+        \\    idiv rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-56], rax
+        \\    mov rax, qword [rbp-56]
+        \\    add rsp, 56
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "two user defined functions taking ints" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
+        \\  :body (/ (- y2 y1) (- x2 x1)))
+        \\
+        \\(fn square :args ((x i64)) :ret i64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (slope 0 10 5 20))
+        \\  (square a))
+    ;
+    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
+    defer interned_strings.deinit();
+    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 0
+        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], 10
+        \\    mov rsi, qword [rbp-16]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], 5
+        \\    mov rdx, qword [rbp-24]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-32], 20
+        \\    mov rcx, qword [rbp-32]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-40], rax
+        \\    mov rdi, qword [rbp-40]
+        \\    call label2
+        \\    sub rsp, 8
+        \\    mov qword [rbp-48], rax
+        \\    mov rdi, qword [rbp-48]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 32
+        \\    mov qword [rbp-8], rdi
+        \\    mov qword [rbp-16], rsi
+        \\    mov qword [rbp-24], rdx
+        \\    mov qword [rbp-32], rcx
+        \\    mov rax, qword [rbp-32]
+        \\    mov rcx, qword [rbp-24]
+        \\    sub rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-40], rax
+        \\    mov rax, qword [rbp-16]
+        \\    mov rcx, qword [rbp-8]
+        \\    sub rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-48], rax
+        \\    mov rax, qword [rbp-40]
+        \\    mov rcx, qword [rbp-48]
+        \\    cqo
+        \\    idiv rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-56], rax
+        \\    mov rax, qword [rbp-56]
+        \\    add rsp, 56
+        \\    pop rbp
+        \\    ret
+        \\
+        \\label2:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    mov rcx, qword [rbp-8]
+        \\    imul rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}
