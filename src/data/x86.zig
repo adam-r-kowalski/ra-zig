@@ -4,8 +4,9 @@ const Allocator = std.mem.Allocator;
 const List = @import("list.zig").List;
 const Map = @import("map.zig").Map;
 const Set = @import("set.zig").Set;
-const InternedString = @import("interned_strings.zig").InternedString;
-const Entity = @import("ir.zig").Entity;
+const entity = @import("entity.zig");
+const InternedString = entity.InternedString;
+const Entity = entity.Entity;
 
 pub const BlockIndex = usize;
 

@@ -3,16 +3,17 @@ const assert = std.debug.assert;
 const Arena = std.heap.ArenaAllocator;
 const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
-const InternedStrings = data.interned_strings.InternedStrings;
-const InternedString = data.interned_strings.InternedString;
-const internString = data.interned_strings.internString;
-const Strings = data.interned_strings.Strings;
+const InternedStrings = data.entity.InternedStrings;
+const InternedString = data.entity.InternedString;
+const internString = data.entity.internString;
+const Strings = data.entity.Strings;
+const Entity = data.entity.Entity;
+const Entities = data.entity.Entities;
+const Builtins = data.entity.Builtins;
 const DeclarationKind = data.ir.DeclarationKind;
 const IrBlock = data.ir.Block;
 const Ir = data.ir.Ir;
-const Builtins = data.ir.Builtins;
 const Overload = data.ir.Overload;
-const Entity = data.ir.Entity;
 const Call = data.ir.Call;
 const X86 = data.x86.X86;
 const X86Block = data.x86.Block;
@@ -32,7 +33,6 @@ const I64 = @enumToInt(Builtins.I64);
 const Float = @enumToInt(Builtins.Float);
 const F64 = @enumToInt(Builtins.F64);
 
-const InternedInt = usize;
 const InternedInts = Map(usize, InternedString);
 
 const Context = struct {
@@ -43,16 +43,16 @@ const Context = struct {
     ir: *const Ir,
     ir_block: *const IrBlock,
     stack: *Stack,
-    interned_strings: *InternedStrings,
+    entities: *Entities,
     interned_ints: *InternedInts,
 };
 
-fn internInt(context: Context, value: usize) !InternedInt {
+fn internInt(context: Context, value: usize) !InternedString {
     if (context.interned_ints.get(value)) |interned| {
         return interned;
     }
     const buffer = try std.fmt.allocPrint(context.allocator, "{}", .{value});
-    const interned = try internString(context.interned_strings, buffer);
+    const interned = try internString(context.entities, buffer);
     try context.interned_ints.putNoClobber(value, interned);
     return interned;
 }
@@ -232,7 +232,7 @@ fn restoreStack(context: Context, offset: usize) !void {
 fn typeOf(context: Context, entity: Entity) !Entity {
     if (context.x86.types.get(entity)) |type_entity|
         return type_entity;
-    if (context.ir.entities.kinds.get(entity)) |kind| {
+    if (context.entities.kinds.get(entity)) |kind| {
         const type_entity = @enumToInt(switch (kind) {
             .Int => Builtins.Int,
             .Float => Builtins.Float,
@@ -250,7 +250,7 @@ fn nameOf(context: Context, entity: Entity) ?InternedString {
         @enumToInt(Builtins.Float) => return @enumToInt(Strings.Float),
         @enumToInt(Builtins.F64) => return @enumToInt(Strings.F64),
         else => {
-            if (context.ir.entities.names.get(entity)) |name| return name;
+            if (context.entities.names.get(entity)) |name| return name;
             return null;
         },
     }
@@ -259,12 +259,12 @@ fn nameOf(context: Context, entity: Entity) ?InternedString {
 fn codegenPrintI64(context: Context, call: Call) !void {
     const argument_offset = try entityStackOffset(context, call.argument_entities[0]);
     try opRegStack(context, .Mov, .Rsi, argument_offset);
-    const format_string = try internString(context.interned_strings, "\"%ld\", 10, 0");
+    const format_string = try internString(context.entities, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
-    const printf = try internString(context.interned_strings, "_printf");
+    const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
     try restoreStack(context, align_offset);
@@ -280,13 +280,13 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 fn codegenPrintF64(context: Context, call: Call) !void {
     const argument_offset = try sseEntityStackOffset(context, call.argument_entities[0]);
     try opSseRegStack(context, .Movsd, .Xmm0, argument_offset);
-    const format_string = try internString(context.interned_strings, "\"%f\", 10, 0");
+    const format_string = try internString(context.entities, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     const one = try internInt(context, 1);
     try opRegLiteral(context, .Mov, .Rax, one);
     const align_offset = try alignStackTo16Bytes(context);
-    const printf = try internString(context.interned_strings, "_printf");
+    const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
     try restoreStack(context, align_offset);
@@ -322,7 +322,7 @@ fn entityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.ir.entities.values.get(entity)) |value| {
+    if (context.entities.values.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
@@ -338,17 +338,17 @@ fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.ir.entities.values.get(entity)) |value| {
+    if (context.entities.values.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
         const eight = try internInt(context, 8);
         try opRegLiteral(context, .Sub, .Rsp, eight);
-        switch (context.ir.entities.kinds.get(entity).?) {
+        switch (context.entities.kinds.get(entity).?) {
             .Int => {
-                const interned = context.interned_strings.data.items[value];
+                const interned = context.entities.interned_strings.data.items[value];
                 const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
-                const quad_word = try internString(context.interned_strings, buffer);
+                const quad_word = try internString(context.entities, buffer);
                 try context.x86.quad_words.insert(quad_word);
                 try opSseRegRelQuadWord(context, .Movsd, .Xmm0, quad_word);
                 try opStackSseReg(context, .Movsd, offset, .Xmm0);
@@ -515,7 +515,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 .ir = context.ir,
                 .ir_block = &overload.blocks.items[overload.body_block_index],
                 .stack = &stack,
-                .interned_strings = context.interned_strings,
+                .entities = context.entities,
                 .interned_ints = context.interned_ints,
             };
             try opReg(overload_context, .Push, .Rbp);
@@ -535,7 +535,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                         const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
                         if (stack.entity.get(ret)) |offset| {
                             try opRegStack(overload_context, .Mov, .Rax, offset);
-                        } else if (context.ir.entities.values.get(ret)) |value| {
+                        } else if (context.entities.values.get(ret)) |value| {
                             try opRegLiteral(overload_context, .Mov, .Rax, value);
                         } else {
                             unreachable;
@@ -555,8 +555,8 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     }
 }
 
-fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
-    const name = interned_strings.mapping.get("main").?;
+fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
+    const name = entities.interned_strings.mapping.get("main").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
     assert(declaration_kind == DeclarationKind.Function);
@@ -582,7 +582,7 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
         .ir = &ir,
         .ir_block = &overload.blocks.items[overload.body_block_index],
         .stack = &stack,
-        .interned_strings = interned_strings,
+        .entities = entities,
         .interned_ints = &interned_ints,
     };
     try opRegReg(context, .Mov, .Rbp, .Rsp);
@@ -592,12 +592,12 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
                 if (stack.entity.get(ret)) |offset| {
                     try opRegStack(context, .Mov, .Rdi, offset);
-                } else if (context.ir.entities.values.get(ret)) |value| {
+                } else if (context.entities.values.get(ret)) |value| {
                     try opRegLiteral(context, .Mov, .Rdi, value);
                 } else {
                     unreachable;
                 }
-                const sys_exit = try internString(interned_strings, "0x02000001");
+                const sys_exit = try internString(entities, "0x02000001");
                 try opRegLiteral(context, .Mov, .Rax, sys_exit);
                 try opNoArgs(x86_block, .Syscall);
             },
@@ -607,7 +607,7 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
     }
 }
 
-pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings) !X86 {
+pub fn codegen(allocator: *Allocator, entities: *Entities, ir: Ir) !X86 {
     const arena = try allocator.create(Arena);
     arena.* = Arena.init(allocator);
     var x86 = X86{
@@ -618,7 +618,7 @@ pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings
         .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
-    try codegenMain(&x86, ir, interned_strings);
+    try codegenMain(&x86, entities, ir);
     return x86;
 }
 
@@ -694,14 +694,14 @@ fn writeSseRegister(output: *List(u8), register: SseRegister) !void {
     }
 }
 
-pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStrings) !List(u8) {
+pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
     try output.insertSlice("    global _main\n");
     var extern_iterator = x86.externs.iterator();
     while (extern_iterator.next()) |entry| {
         try output.insertSlice("    extern ");
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     if ((x86.bytes.count() + x86.quad_words.count()) > 0) {
@@ -710,13 +710,13 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
     var byte_iterator = x86.bytes.iterator();
     while (byte_iterator.next()) |entry| {
         try output.insertFormatted("byte{}: db ", .{entry.key});
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     var quad_word_iterator = x86.quad_words.iterator();
     while (quad_word_iterator.next()) |entry| {
         try output.insertFormatted("quad_word{}: dq ", .{entry.key});
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     try output.insertSlice(
@@ -742,7 +742,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
                     .Register => try writeRegister(&output, @intToEnum(Register, operands[k])),
                     .SseRegister => try writeSseRegister(&output, @intToEnum(SseRegister, operands[k])),
                     .Label => try writeLabel(&output, operands[k]),
-                    .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
+                    .Literal => try output.insertSlice(entities.interned_strings.data.items[operands[k]]),
                     .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
                     .QuadWord => try output.insertFormatted("quad_word{}", .{operands[k]}),
                     .RelativeQuadWord => try output.insertFormatted("[rel quad_word{}]", .{operands[k]}),
