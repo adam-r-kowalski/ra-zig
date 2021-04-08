@@ -2,22 +2,13 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const Map = @import("map.zig").Map;
 const List = @import("list.zig").List;
-const InternedString = @import("interned_strings.zig").InternedString;
-
-pub const Entity = usize;
+const entity = @import("entity.zig");
+const InternedString = entity.InternedString;
+const Entity = entity.Entity;
 
 pub const Scopes = enum(usize) {
     External,
     Function,
-};
-
-pub const Builtins = enum(usize) {
-    If,
-    Const,
-    Int,
-    I64,
-    Float,
-    F64,
 };
 
 const String = []const u8;
@@ -33,11 +24,6 @@ pub const ExpressionKind = enum(u8) {
     Branch,
     Phi,
     Jump,
-};
-
-pub const LiteralKind = enum(u8) {
-    Int,
-    Float,
 };
 
 pub const Call = struct {
@@ -71,13 +57,6 @@ pub const Block = struct {
     jumps: List(usize),
 };
 
-pub const Entities = struct {
-    names: Map(Entity, InternedString),
-    values: Map(Entity, InternedString),
-    kinds: Map(Entity, LiteralKind),
-    next_entity: Entity,
-};
-
 pub const Overload = struct {
     parameter_entities: []const InternedString,
     parameter_type_block_indices: []const usize,
@@ -99,7 +78,6 @@ pub const Ir = struct {
     names: List(InternedString),
     indices: List(usize),
     functions: List(Function),
-    entities: Entities,
     arena: *Arena,
 
     pub fn deinit(self: *@This()) void {

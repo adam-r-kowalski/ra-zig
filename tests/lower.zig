@@ -9,13 +9,13 @@ test "main" {
         \\(fn main :args () :ret i64
         \\  :body 0)
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn main
@@ -46,13 +46,13 @@ test "unicode characters and compound expressions" {
         \\(fn distance :args ((x f64) (y f64)) :ret f64
         \\  :body (√ (+ (^ x 2) (^ y 2))))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn distance
@@ -105,13 +105,13 @@ test "conditionals" {
         \\(fn max :args ((x i64) (y i64)) :ret i64
         \\  :body (if (> x y) x y))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn max
@@ -171,13 +171,13 @@ test "int constants" {
         \\  (const y2 (^ y 2))
         \\  (+ x2 y2))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn sum-of-squares
@@ -230,13 +230,13 @@ test "float constants" {
         \\  (const y2 (^ y 2.0))
         \\  (+ x2 y2))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn sum-of-squares
@@ -289,13 +289,13 @@ test "overloading" {
         \\(fn area :args ((r rectangle)) :ret f64
         \\  :body (* (width r) (height r)))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var ir_string = try lang.irString(&gpa.allocator, interned_strings, ir);
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
         \\(fn area
