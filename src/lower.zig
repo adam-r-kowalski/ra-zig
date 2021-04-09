@@ -65,7 +65,7 @@ fn lowerNumber(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     const entity = entities.next_entity;
     entities.next_entity += 1;
-    try entities.values.putNoClobber(entity, number);
+    try entities.literals.putNoClobber(entity, number);
     try entities.kinds.putNoClobber(entity, kind);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
@@ -376,7 +376,7 @@ fn writeScopes(writer: Writer) !void {
                 try anonymous_entity_to_name.putNoClobber(entity, name);
                 try output.insertFormatted("%t{}", .{name});
             }
-            if (writer.entities.values.get(entity)) |string_index| {
+            if (writer.entities.literals.get(entity)) |string_index| {
                 try output.insertSlice(" :value ");
                 try output.insertSlice(writer.entities.interned_strings.data.items[string_index]);
             }

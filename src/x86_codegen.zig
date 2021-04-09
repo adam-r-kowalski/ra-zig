@@ -322,7 +322,7 @@ fn entityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.entities.values.get(entity)) |value| {
+    if (context.entities.literals.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
@@ -338,7 +338,7 @@ fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
     if (context.stack.entity.get(entity)) |offset| {
         return offset;
     }
-    if (context.entities.values.get(entity)) |value| {
+    if (context.entities.literals.get(entity)) |value| {
         context.stack.top += 8;
         const offset = context.stack.top;
         try context.stack.entity.putNoClobber(entity, offset);
@@ -535,7 +535,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                         const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
                         if (stack.entity.get(ret)) |offset| {
                             try opRegStack(overload_context, .Mov, .Rax, offset);
-                        } else if (context.entities.values.get(ret)) |value| {
+                        } else if (context.entities.literals.get(ret)) |value| {
                             try opRegLiteral(overload_context, .Mov, .Rax, value);
                         } else {
                             unreachable;
@@ -592,7 +592,7 @@ fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
                 if (stack.entity.get(ret)) |offset| {
                     try opRegStack(context, .Mov, .Rdi, offset);
-                } else if (context.entities.values.get(ret)) |value| {
+                } else if (context.entities.literals.get(ret)) |value| {
                     try opRegLiteral(context, .Mov, .Rdi, value);
                 } else {
                     unreachable;

@@ -58,7 +58,7 @@ pub const Strings = enum(InternedString) {
 
 pub const Entities = struct {
     names: Map(Entity, InternedString),
-    values: Map(Entity, InternedString),
+    literals: Map(Entity, InternedString),
     kinds: Map(Entity, LiteralKind),
     next_entity: Entity,
     interned_strings: InternedStrings,
@@ -70,7 +70,7 @@ pub const Entities = struct {
         const next_id = @typeInfo(Builtins).Enum.fields.len;
         var entities = Entities{
             .names = Map(Entity, InternedString).init(&arena.allocator),
-            .values = Map(Entity, InternedString).init(&arena.allocator),
+            .literals = Map(Entity, InternedString).init(&arena.allocator),
             .kinds = Map(Entity, LiteralKind).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
