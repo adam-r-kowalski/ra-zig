@@ -22,11 +22,6 @@ pub const Builtins = enum(Entity) {
     F64,
 };
 
-pub const LiteralKind = enum(u8) {
-    Int,
-    Float,
-};
-
 pub fn internString(entities: *Entities, string: []const u8) !InternedString {
     const result = try entities.interned_strings.mapping.getOrPut(string);
     if (result.found_existing)
@@ -59,7 +54,7 @@ pub const Strings = enum(InternedString) {
 pub const Entities = struct {
     names: Map(Entity, InternedString),
     literals: Map(Entity, InternedString),
-    kinds: Map(Entity, LiteralKind),
+    types: Map(Entity, Entity),
     next_entity: Entity,
     interned_strings: InternedStrings,
     arena: *Arena,
@@ -71,7 +66,7 @@ pub const Entities = struct {
         var entities = Entities{
             .names = Map(Entity, InternedString).init(&arena.allocator),
             .literals = Map(Entity, InternedString).init(&arena.allocator),
-            .kinds = Map(Entity, LiteralKind).init(&arena.allocator),
+            .types = Map(Entity, Entity).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
                 .data = List([]const u8).init(&arena.allocator),

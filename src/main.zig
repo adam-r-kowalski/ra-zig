@@ -58,7 +58,7 @@ pub fn main() anyerror!void {
         \\initialize allocator  {}
         \\collecting args       {}
         \\reading source file   {}
-        \\init interned strings {}
+        \\init entities {}
         \\parsing               {}
         \\lowering              {}
         \\codegen               {}

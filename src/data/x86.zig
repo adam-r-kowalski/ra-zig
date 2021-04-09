@@ -88,7 +88,6 @@ pub const Block = struct {
 
 pub const X86 = struct {
     blocks: List(Block),
-    types: Map(Entity, Entity),
     externs: Set(InternedString),
     bytes: Set(InternedString),
     quad_words: Set(InternedString),
