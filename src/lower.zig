@@ -502,7 +502,7 @@ fn writeBlocks(writer: Writer) !void {
 fn functionString(allocator: *Allocator, output: *List(u8), entities: Entities, ir: Ir, ir_entity: usize) !void {
     const string_index = ir.names.items[ir_entity];
     const name = entities.interned_strings.data.items[string_index];
-    const overloads = ir.functions.items[ir.indices.items[ir_entity]].slice();
+    const overloads = ir.functions.items[ir.indices.items[ir_entity]].overloads.slice();
     for (overloads) |overload, i| {
         var anonymous_entity_to_name = Map(usize, usize).init(allocator);
         defer anonymous_entity_to_name.deinit();
