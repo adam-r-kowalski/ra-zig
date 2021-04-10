@@ -51,12 +51,23 @@ pub const Strings = enum(InternedString) {
     Print,
 };
 
+pub const Status = enum { Unanalyzed, Analyzed };
+
+pub const Overloads = struct {
+    status: List(Status),
+    parameter_types: List([]const Entity),
+    return_type: List(Entity),
+    block: List(usize),
+};
+
 pub const Entities = struct {
     names: Map(Entity, InternedString),
     literals: Map(Entity, InternedString),
     types: Map(Entity, Entity),
+    overload_index: Map(Entity, usize),
     next_entity: Entity,
     interned_strings: InternedStrings,
+    overloads: Overloads,
     arena: *Arena,
 
     pub fn init(allocator: *Allocator) !Entities {
@@ -67,10 +78,17 @@ pub const Entities = struct {
             .names = Map(Entity, InternedString).init(&arena.allocator),
             .literals = Map(Entity, InternedString).init(&arena.allocator),
             .types = Map(Entity, Entity).init(&arena.allocator),
+            .overload_index = Map(Entity, usize).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
                 .data = List([]const u8).init(&arena.allocator),
                 .mapping = Map([]const u8, InternedString).init(&arena.allocator),
+            },
+            .overloads = Overloads{
+                .status = List(Status).init(&arena.allocator),
+                .parameter_types = List([]const Entity).init(&arena.allocator),
+                .return_type = List(Entity).init(&arena.allocator),
+                .block = List(usize).init(&arena.allocator),
             },
             .arena = arena,
         };

@@ -957,3 +957,67 @@ test "two user defined functions taking ints" {
         \\    ret
     );
 }
+
+test "call user defined function twice" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x i64)) :ret i64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (square 10))
+        \\  (const b (square 15))
+        \\  b)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], 10
+        \\    mov rdi, qword [rbp-8]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], 15
+        \\    mov rdi, qword [rbp-24]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-32], rax
+        \\    mov rdi, qword [rbp-32]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    mov rcx, qword [rbp-8]
+        \\    imul rax, rcx
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}

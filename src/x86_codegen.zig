@@ -453,90 +453,120 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
-            const overloads = context.ir.functions.items[context.ir.indices.items[index]];
-            assert(overloads.length == 1);
-            const overload = &overloads.items[0];
-            const type_block_indices = overload.parameter_type_block_indices;
-            assert(type_block_indices.len == call.argument_entities.len);
+            const function = &context.ir.functions.items[context.ir.indices.items[index]];
+            assert(function.overloads.length == 1);
+            const overload = &function.overloads.items[0];
+            const overload_index = context.entities.overload_index.get(function.entities.items[0]).?;
             const integer_argument_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
-            const parameter_entities = overload.parameter_entities;
-            for (type_block_indices) |type_block_index, argument_index| {
-                assert(argument_index < integer_argument_registers.len);
-                const type_block = &overload.blocks.items[type_block_index];
-                assert(type_block.kinds.length == 1);
-                assert(type_block.kinds.items[0] == .Return);
-                const parameter_type = type_block.returns.items[type_block.indices.items[0]];
-                assert(parameter_type == @enumToInt(Builtins.I64));
-                const argument_entity = call.argument_entities[argument_index];
-                const argument_type = context.entities.types.get(argument_entity).?;
-                assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                const offset = try entityStackOffset(context, argument_entity);
-                try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
-                try context.entities.types.putNoClobber(parameter_entities[argument_index], parameter_type);
-            }
-            const x86_block_result = try context.x86.blocks.addOne();
-            try opLabel(context, .Call, x86_block_result.index);
-            const eight = try internInt(context, 8);
-            try opRegLiteral(context, .Sub, .Rsp, eight);
-            context.stack.top += 8;
-            try opStackReg(context, .Mov, context.stack.top, .Rax);
-            try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
-            const return_type_block = &overload.blocks.items[overload.return_type_block_index];
-            assert(return_type_block.kinds.length == 1);
-            assert(return_type_block.kinds.items[0] == .Return);
-            const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
-            try context.entities.types.putNoClobber(call.result_entity, return_type);
-            const x86_block = x86_block_result.ptr;
-            x86_block.instructions = List(Instruction).init(context.allocator);
-            x86_block.operand_kinds = List([]const Kind).init(context.allocator);
-            x86_block.operands = List([]const usize).init(context.allocator);
-            var stack = Stack{
-                .entity = Map(Entity, usize).init(context.allocator),
-                .top = 0,
-            };
-            const overload_context = Context{
-                .allocator = context.allocator,
-                .overload = overload,
-                .x86 = context.x86,
-                .x86_block = x86_block,
-                .ir = context.ir,
-                .ir_block = &overload.blocks.items[overload.body_block_index],
-                .stack = &stack,
-                .entities = context.entities,
-                .interned_ints = context.interned_ints,
-            };
-            try opReg(overload_context, .Push, .Rbp);
-            try opRegReg(overload_context, .Mov, .Rbp, .Rsp);
-            const parameter_offset = parameter_entities.len * 8;
-            const interned_int = try internInt(overload_context, parameter_offset);
-            overload_context.stack.top = parameter_offset;
-            try opRegLiteral(overload_context, .Sub, .Rsp, interned_int);
-            for (parameter_entities) |parameter_entity, i| {
-                const offset = (i + 1) * 8;
-                try opStackReg(overload_context, .Mov, offset, integer_argument_registers[i]);
-                try overload_context.stack.entity.putNoClobber(parameter_entity, offset);
-            }
-            for (overload_context.ir_block.kinds.slice()) |expression_kind, i| {
-                switch (expression_kind) {
-                    .Return => {
-                        const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
-                        if (stack.entity.get(ret)) |offset| {
-                            try opRegStack(overload_context, .Mov, .Rax, offset);
-                        } else if (context.entities.literals.get(ret)) |value| {
-                            try opRegLiteral(overload_context, .Mov, .Rax, value);
-                        } else {
-                            unreachable;
-                        }
-                        if (overload_context.stack.top > 0) {
-                            const offset = try internInt(overload_context, overload_context.stack.top);
-                            try opRegLiteral(overload_context, .Add, .Rsp, offset);
-                        }
-                        try opReg(overload_context, .Pop, .Rbp);
-                        try opNoArgs(x86_block, .Ret);
-                    },
-                    .Call => try codegenCall(overload_context, i),
-                    else => unreachable,
+            if (context.entities.overloads.status.items[overload_index] == .Unanalyzed) {
+                const type_block_indices = overload.parameter_type_block_indices;
+                assert(type_block_indices.len == call.argument_entities.len);
+                const parameter_entities = overload.parameter_entities;
+                const parameter_types = try context.allocator.alloc(Entity, parameter_entities.len);
+                for (type_block_indices) |type_block_index, argument_index| {
+                    assert(argument_index < integer_argument_registers.len);
+                    const type_block = &overload.blocks.items[type_block_index];
+                    assert(type_block.kinds.length == 1);
+                    assert(type_block.kinds.items[0] == .Return);
+                    const parameter_type = type_block.returns.items[type_block.indices.items[0]];
+                    assert(parameter_type == @enumToInt(Builtins.I64));
+                    const argument_entity = call.argument_entities[argument_index];
+                    const argument_type = context.entities.types.get(argument_entity).?;
+                    assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                    const offset = try entityStackOffset(context, argument_entity);
+                    try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
+                    try context.entities.types.putNoClobber(parameter_entities[argument_index], parameter_type);
+                    parameter_types[argument_index] = parameter_type;
                 }
+                const x86_block_result = try context.x86.blocks.addOne();
+                try opLabel(context, .Call, x86_block_result.index);
+                const eight = try internInt(context, 8);
+                try opRegLiteral(context, .Sub, .Rsp, eight);
+                context.stack.top += 8;
+                try opStackReg(context, .Mov, context.stack.top, .Rax);
+                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
+                const return_type_block = &overload.blocks.items[overload.return_type_block_index];
+                assert(return_type_block.kinds.length == 1);
+                assert(return_type_block.kinds.items[0] == .Return);
+                const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
+                try context.entities.types.putNoClobber(call.result_entity, return_type);
+                context.entities.overloads.parameter_types.items[overload_index] = parameter_types;
+                context.entities.overloads.return_type.items[overload_index] = return_type;
+                context.entities.overloads.block.items[overload_index] = x86_block_result.index;
+                context.entities.overloads.status.items[overload_index] = .Analyzed;
+                const x86_block = x86_block_result.ptr;
+                x86_block.instructions = List(Instruction).init(context.allocator);
+                x86_block.operand_kinds = List([]const Kind).init(context.allocator);
+                x86_block.operands = List([]const usize).init(context.allocator);
+                var stack = Stack{
+                    .entity = Map(Entity, usize).init(context.allocator),
+                    .top = 0,
+                };
+                const overload_context = Context{
+                    .allocator = context.allocator,
+                    .overload = overload,
+                    .x86 = context.x86,
+                    .x86_block = x86_block,
+                    .ir = context.ir,
+                    .ir_block = &overload.blocks.items[overload.body_block_index],
+                    .stack = &stack,
+                    .entities = context.entities,
+                    .interned_ints = context.interned_ints,
+                };
+                try opReg(overload_context, .Push, .Rbp);
+                try opRegReg(overload_context, .Mov, .Rbp, .Rsp);
+                const parameter_offset = parameter_entities.len * 8;
+                const interned_int = try internInt(overload_context, parameter_offset);
+                overload_context.stack.top = parameter_offset;
+                try opRegLiteral(overload_context, .Sub, .Rsp, interned_int);
+                for (parameter_entities) |parameter_entity, i| {
+                    const offset = (i + 1) * 8;
+                    try opStackReg(overload_context, .Mov, offset, integer_argument_registers[i]);
+                    try overload_context.stack.entity.putNoClobber(parameter_entity, offset);
+                }
+                for (overload_context.ir_block.kinds.slice()) |expression_kind, i| {
+                    switch (expression_kind) {
+                        .Return => {
+                            const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
+                            if (stack.entity.get(ret)) |offset| {
+                                try opRegStack(overload_context, .Mov, .Rax, offset);
+                            } else if (context.entities.literals.get(ret)) |value| {
+                                try opRegLiteral(overload_context, .Mov, .Rax, value);
+                            } else {
+                                unreachable;
+                            }
+                            if (overload_context.stack.top > 0) {
+                                const offset = try internInt(overload_context, overload_context.stack.top);
+                                try opRegLiteral(overload_context, .Add, .Rsp, offset);
+                            }
+                            try opReg(overload_context, .Pop, .Rbp);
+                            try opNoArgs(x86_block, .Ret);
+                        },
+                        .Call => try codegenCall(overload_context, i),
+                        else => unreachable,
+                    }
+                }
+            } else {
+                const parameter_types = context.entities.overloads.parameter_types.items[overload_index];
+                assert(parameter_types.len == call.argument_entities.len);
+                for (parameter_types) |parameter_type, argument_index| {
+                    assert(argument_index < integer_argument_registers.len);
+                    assert(parameter_type == @enumToInt(Builtins.I64));
+                    const argument_entity = call.argument_entities[argument_index];
+                    const argument_type = context.entities.types.get(argument_entity).?;
+                    assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                    const offset = try entityStackOffset(context, argument_entity);
+                    try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
+                }
+                const block_index = context.entities.overloads.block.items[overload_index];
+                try opLabel(context, .Call, block_index);
+                const eight = try internInt(context, 8);
+                try opRegLiteral(context, .Sub, .Rsp, eight);
+                context.stack.top += 8;
+                try opStackReg(context, .Mov, context.stack.top, .Rax);
+                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
+                const return_type = context.entities.overloads.return_type.items[overload_index];
+                try context.entities.types.putNoClobber(call.result_entity, return_type);
             }
         },
     }
@@ -548,14 +578,14 @@ fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
     const declaration_kind = ir.kinds.items[index];
     assert(declaration_kind == DeclarationKind.Function);
     assert(name == ir.names.items[index]);
-    const overloads = ir.functions.items[ir.indices.items[index]];
-    assert(overloads.length == 1);
+    const function = &ir.functions.items[ir.indices.items[index]];
+    assert(function.overloads.length == 1);
     const allocator = &x86.arena.allocator;
     const x86_block = (try x86.blocks.addOne()).ptr;
     x86_block.instructions = List(Instruction).init(allocator);
     x86_block.operand_kinds = List([]const Kind).init(allocator);
     x86_block.operands = List([]const usize).init(allocator);
-    const overload = &overloads.items[0];
+    const overload = &function.overloads.items[0];
     var stack = Stack{
         .entity = Map(Entity, usize).init(allocator),
         .top = 0,

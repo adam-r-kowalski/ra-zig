@@ -260,7 +260,15 @@ fn childrenTillNextKeyword(ast: Ast, children: Children) usize {
 
 fn lowerOverload(ir: *Ir, entities: *Entities, function: *Function, ast: Ast, children: Children) !void {
     const allocator = &ir.arena.allocator;
-    const overload = (try function.addOne()).ptr;
+    const overload = (try function.overloads.addOne()).ptr;
+    const overload_entity = entities.next_entity;
+    entities.next_entity += 1;
+    _ = try function.entities.insert(overload_entity);
+    const overload_index = try entities.overloads.status.insert(.Unanalyzed);
+    _ = try entities.overloads.parameter_types.insert(undefined);
+    _ = try entities.overloads.return_type.insert(undefined);
+    _ = try entities.overloads.block.insert(undefined);
+    try entities.overload_index.putNoClobber(overload_entity, overload_index);
     overload.scopes = List(Scope).init(allocator);
     _ = try overload.scopes.insert(.{
         .name_to_entity = Map(InternedString, usize).init(allocator),
@@ -297,7 +305,10 @@ fn createOrOverloadFunction(ir: *Ir, ast: Ast, ast_entity: usize) !*Function {
     _ = try ir.kinds.insert(.Function);
     get_or_put_result.entry.value = try ir.names.insert(name);
     const result = try ir.functions.addOne();
-    result.ptr.* = List(Overload).init(&ir.arena.allocator);
+    result.ptr.* = Function{
+        .overloads = List(Overload).init(&ir.arena.allocator),
+        .entities = List(Entity).init(&ir.arena.allocator),
+    };
     _ = try ir.indices.insert(result.index);
     return result.ptr;
 }

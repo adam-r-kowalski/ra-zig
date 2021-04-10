@@ -12,12 +12,8 @@
 
 (fn main :args () :ret i64
   :body
-  (const x1 5)
-  (const x2 10)
-  (const y1 15)
-  (const y2 30)
-  (const a (slope x1 x2 y1 y2))
+  (const a (square 2))
   (print a)
-  (const b (square a))
+  (const b (square 4))
   (print b)
-  (mean x2 y2))
+  (mean a b))
