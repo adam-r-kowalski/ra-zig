@@ -1,19 +1,10 @@
-(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
-  :body (/ (- y2 y1) (- x2 x1)))
-
-
-(fn square :args ((x i64)) :ret i64
+(fn square :args ((x f64)) :ret f64
   :body (* x x))
-
-
-(fn mean :args ((x i64) (y i64)) :ret i64
-  :body (/ (+ x y) 2))
 
 
 (fn main :args () :ret i64
   :body
-  (const a (square 2))
-  (print a)
-  (const b (square 4))
-  (print b)
-  (mean a b))
+  (const a 10.3)
+  (const b 35.5)
+  (print (+ (square a) b))
+  0)

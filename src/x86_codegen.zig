@@ -457,38 +457,52 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
             assert(function.overloads.length == 1);
             const overload = &function.overloads.items[0];
             const overload_index = context.entities.overload_index.get(function.entities.items[0]).?;
-            const integer_argument_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
+            const int_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
+            const float_registers = [_]SseRegister{ .Xmm0, .Xmm1, .Xmm2, .Xmm3, .Xmm4, .Xmm5 };
             if (context.entities.overloads.status.items[overload_index] == .Unanalyzed) {
                 const type_block_indices = overload.parameter_type_block_indices;
                 assert(type_block_indices.len == call.argument_entities.len);
                 const parameter_entities = overload.parameter_entities;
                 const parameter_types = try context.allocator.alloc(Entity, parameter_entities.len);
                 for (type_block_indices) |type_block_index, argument_index| {
-                    assert(argument_index < integer_argument_registers.len);
+                    assert(argument_index < int_registers.len);
                     const type_block = &overload.blocks.items[type_block_index];
                     assert(type_block.kinds.length == 1);
                     assert(type_block.kinds.items[0] == .Return);
                     const parameter_type = type_block.returns.items[type_block.indices.items[0]];
-                    assert(parameter_type == @enumToInt(Builtins.I64));
                     const argument_entity = call.argument_entities[argument_index];
                     const argument_type = context.entities.types.get(argument_entity).?;
-                    assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                    const offset = try entityStackOffset(context, argument_entity);
-                    try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
+                    switch (parameter_type) {
+                        @enumToInt(Builtins.I64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                            const offset = try entityStackOffset(context, argument_entity);
+                            try opRegStack(context, .Mov, int_registers[argument_index], offset);
+                        },
+                        @enumToInt(Builtins.F64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
+                            const offset = try sseEntityStackOffset(context, argument_entity);
+                            try opSseRegStack(context, .Movsd, float_registers[argument_index], offset);
+                        },
+                        else => unreachable,
+                    }
                     try context.entities.types.putNoClobber(parameter_entities[argument_index], parameter_type);
                     parameter_types[argument_index] = parameter_type;
                 }
                 const x86_block_result = try context.x86.blocks.addOne();
                 try opLabel(context, .Call, x86_block_result.index);
-                const eight = try internInt(context, 8);
-                try opRegLiteral(context, .Sub, .Rsp, eight);
-                context.stack.top += 8;
-                try opStackReg(context, .Mov, context.stack.top, .Rax);
-                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
                 const return_type_block = &overload.blocks.items[overload.return_type_block_index];
                 assert(return_type_block.kinds.length == 1);
                 assert(return_type_block.kinds.items[0] == .Return);
                 const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
+                const eight = try internInt(context, 8);
+                try opRegLiteral(context, .Sub, .Rsp, eight);
+                context.stack.top += 8;
+                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
+                switch (return_type) {
+                    @enumToInt(Builtins.I64) => try opStackReg(context, .Mov, context.stack.top, .Rax),
+                    @enumToInt(Builtins.F64) => try opStackSseReg(context, .Movsd, context.stack.top, .Xmm0),
+                    else => unreachable,
+                }
                 try context.entities.types.putNoClobber(call.result_entity, return_type);
                 context.entities.overloads.parameter_types.items[overload_index] = parameter_types;
                 context.entities.overloads.return_type.items[overload_index] = return_type;
@@ -521,7 +535,11 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 try opRegLiteral(overload_context, .Sub, .Rsp, interned_int);
                 for (parameter_entities) |parameter_entity, i| {
                     const offset = (i + 1) * 8;
-                    try opStackReg(overload_context, .Mov, offset, integer_argument_registers[i]);
+                    switch (parameter_types[i]) {
+                        @enumToInt(Builtins.I64) => try opStackReg(overload_context, .Mov, offset, int_registers[i]),
+                        @enumToInt(Builtins.F64) => try opStackSseReg(overload_context, .Movsd, offset, float_registers[i]),
+                        else => unreachable,
+                    }
                     try overload_context.stack.entity.putNoClobber(parameter_entity, offset);
                 }
                 for (overload_context.ir_block.kinds.slice()) |expression_kind, i| {
@@ -529,9 +547,20 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                         .Return => {
                             const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
                             if (stack.entity.get(ret)) |offset| {
-                                try opRegStack(overload_context, .Mov, .Rax, offset);
+                                switch (return_type) {
+                                    @enumToInt(Builtins.I64) => try opRegStack(overload_context, .Mov, .Rax, offset),
+                                    @enumToInt(Builtins.F64) => try opSseRegStack(overload_context, .Movsd, .Xmm0, offset),
+                                    else => unreachable,
+                                }
                             } else if (context.entities.literals.get(ret)) |value| {
-                                try opRegLiteral(overload_context, .Mov, .Rax, value);
+                                switch (return_type) {
+                                    @enumToInt(Builtins.I64) => try opRegLiteral(overload_context, .Mov, .Rax, value),
+                                    @enumToInt(Builtins.F64) => {
+                                        try context.x86.quad_words.insert(value);
+                                        try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
+                                    },
+                                    else => unreachable,
+                                }
                             } else {
                                 unreachable;
                             }
@@ -550,13 +579,13 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 const parameter_types = context.entities.overloads.parameter_types.items[overload_index];
                 assert(parameter_types.len == call.argument_entities.len);
                 for (parameter_types) |parameter_type, argument_index| {
-                    assert(argument_index < integer_argument_registers.len);
+                    assert(argument_index < int_registers.len);
                     assert(parameter_type == @enumToInt(Builtins.I64));
                     const argument_entity = call.argument_entities[argument_index];
                     const argument_type = context.entities.types.get(argument_entity).?;
                     assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
                     const offset = try entityStackOffset(context, argument_entity);
-                    try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
+                    try opRegStack(context, .Mov, int_registers[argument_index], offset);
                 }
                 const block_index = context.entities.overloads.block.items[overload_index];
                 try opLabel(context, .Call, block_index);
