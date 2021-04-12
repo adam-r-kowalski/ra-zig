@@ -183,6 +183,16 @@ fn opReg(context: Context, op: Instruction, reg: Register) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opStack(context: Context, op: Instruction, offset: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
+    operand_kinds[0] = .StackOffset;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
+    operands[0] = offset;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opSseRegRelQuadWord(context: Context, op: Instruction, to: SseRegister, quad_word: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
@@ -351,12 +361,51 @@ fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
     unreachable;
 }
 
+fn moveToRegister(context: Context, register: Register, entity: Entity) !void {
+    if (context.entities.literals.get(entity)) |value| {
+        assert(context.entities.types.get(entity).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, register, value);
+    } else if (context.stack.entity.get(entity)) |offset| {
+        try opRegStack(context, .Mov, register, offset);
+    } else {
+        unreachable;
+    }
+}
+
+fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !void {
+    if (context.entities.literals.get(entity)) |value| {
+        switch (context.entities.types.get(entity).?) {
+            @enumToInt(Builtins.Int) => {
+                const interned = context.entities.interned_strings.data.items[value];
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
+                const quad_word = try internString(context.entities, buffer);
+                try context.x86.quad_words.insert(quad_word);
+                try opSseRegRelQuadWord(context, .Movsd, register, quad_word);
+            },
+            @enumToInt(Builtins.Float) => {
+                try context.x86.quad_words.insert(value);
+                try opSseRegRelQuadWord(context, .Movsd, register, value);
+            },
+            else => unreachable,
+        }
+    } else if (context.stack.entity.get(entity)) |offset| {
+        try opSseRegStack(context, .Movsd, register, offset);
+    } else {
+        unreachable;
+    }
+}
+
 fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try entityStackOffset(context, lhs);
-    const rhs_offset = try entityStackOffset(context, rhs);
-    try opRegStack(context, .Mov, .Rax, lhs_offset);
-    try opRegStack(context, .Mov, .Rcx, rhs_offset);
-    try opRegReg(context, op, .Rax, .Rcx);
+    try moveToRegister(context, .Rax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opRegReg(context, op, .Rax, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, op, .Rax, offset);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
@@ -367,11 +416,28 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try sseEntityStackOffset(context, lhs);
-    const rhs_offset = try sseEntityStackOffset(context, rhs);
-    try opSseRegStack(context, .Movsd, .Xmm0, lhs_offset);
-    try opSseRegStack(context, .Movsd, .Xmm1, rhs_offset);
-    try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
+    try moveToSseRegister(context, .Xmm0, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        switch (context.entities.types.get(rhs).?) {
+            @enumToInt(Builtins.Int) => {
+                const interned = context.entities.interned_strings.data.items[value];
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
+                const quad_word = try internString(context.entities, buffer);
+                try context.x86.quad_words.insert(quad_word);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm1, quad_word);
+            },
+            @enumToInt(Builtins.Float) => {
+                try context.x86.quad_words.insert(value);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm1, value);
+            },
+            else => unreachable,
+        }
+        try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opSseRegStack(context, op, .Xmm1, offset);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
@@ -404,12 +470,17 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
 }
 
 fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try entityStackOffset(context, lhs);
-    const rhs_offset = try entityStackOffset(context, rhs);
-    try opRegStack(context, .Mov, .Rax, lhs_offset);
-    try opRegStack(context, .Mov, .Rcx, rhs_offset);
+    try moveToRegister(context, .Rax, lhs);
     try opNoArgs(context.x86_block, .Cqo);
-    try opReg(context, .Idiv, .Rcx);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opReg(context, .Idiv, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opStack(context, .Idiv, offset);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
@@ -438,29 +509,6 @@ fn codegenDivide(context: Context, call: Call) !void {
             else => unreachable,
         },
         else => unreachable,
-    }
-}
-
-fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !void {
-    if (context.entities.literals.get(entity)) |value| {
-        switch (context.entities.types.get(entity).?) {
-            @enumToInt(Builtins.Int) => {
-                const interned = context.entities.interned_strings.data.items[value];
-                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
-                const quad_word = try internString(context.entities, buffer);
-                try context.x86.quad_words.insert(quad_word);
-                try opSseRegRelQuadWord(context, .Movsd, register, quad_word);
-            },
-            @enumToInt(Builtins.Float) => {
-                try context.x86.quad_words.insert(value);
-                try opSseRegRelQuadWord(context, .Movsd, register, value);
-            },
-            else => unreachable,
-        }
-    } else if (context.stack.entity.get(entity)) |offset| {
-        try opSseRegStack(context, .Movsd, register, offset);
-    } else {
-        unreachable;
     }
 }
 

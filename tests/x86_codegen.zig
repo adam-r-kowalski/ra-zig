@@ -69,16 +69,12 @@ test "binary op between two signed integers" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
-            \\    mov qword [rbp-8], 10
-            \\    sub rsp, 8
-            \\    mov qword [rbp-16], 15
-            \\    mov rax, qword [rbp-8]
-            \\    mov rcx, qword [rbp-16]
+            \\    mov rax, 10
+            \\    mov rcx, 15
             \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-24], rax
-            \\    mov rdi, qword [rbp-24]
+            \\    mov qword [rbp-8], rax
+            \\    mov rdi, qword [rbp-8]
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -121,23 +117,17 @@ test "binary op between three signed integers" {
             \\
             \\_main:
             \\    mov rbp, rsp
+            \\    mov rax, 10
+            \\    mov rcx, 15
+            \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-8], 10
-            \\    sub rsp, 8
-            \\    mov qword [rbp-16], 15
+            \\    mov qword [rbp-8], rax
             \\    mov rax, qword [rbp-8]
-            \\    mov rcx, qword [rbp-16]
+            \\    mov rcx, 20
             \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-24], rax
-            \\    sub rsp, 8
-            \\    mov qword [rbp-32], 20
-            \\    mov rax, qword [rbp-24]
-            \\    mov rcx, qword [rbp-32]
-            \\    {s} rax, rcx
-            \\    sub rsp, 8
-            \\    mov qword [rbp-40], rax
-            \\    mov rdi, qword [rbp-40]
+            \\    mov qword [rbp-16], rax
+            \\    mov rdi, qword [rbp-16]
             \\    mov rax, 0x02000001
             \\    syscall
         , .{ instructions[i], instructions[i] });
@@ -175,17 +165,13 @@ test "divide two signed integers" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 20
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 4
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov rax, 20
         \\    cqo
+        \\    mov rcx, 4
         \\    idiv rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -228,17 +214,11 @@ test "binary op between two signed floats" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word19]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -286,17 +266,11 @@ test "binary op between signed float and comptime int" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word23]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word23]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -337,24 +311,18 @@ test "binary op between comptime int and signed float" {
             \\
             \\    section .data
             \\
-            \\quad_word23: dq 10.0
             \\quad_word19: dq 30.5
+            \\quad_word22: dq 10.0
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word23]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm0, [rel quad_word22]
+            \\    movsd xmm1, [rel quad_word19]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -404,25 +372,16 @@ test "binary op between three signed floats" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
+            \\    movsd xmm1, [rel quad_word19]
+            \\    {s} xmm0, xmm1
+            \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word22]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word22]
-            \\    movsd qword [rbp-32], xmm0
-            \\    movsd xmm0, qword [rbp-24]
-            \\    movsd xmm1, qword [rbp-32]
-            \\    {s} xmm0, xmm1
-            \\    sub rsp, 8
-            \\    movsd qword [rbp-40], xmm0
+            \\    movsd qword [rbp-16], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall

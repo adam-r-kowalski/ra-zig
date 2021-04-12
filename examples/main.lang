@@ -1,10 +1,8 @@
-(fn mean :args ((x f64) (y f64)) :ret f64
-  :body (/ (+ x y) 2))
-
-
 (fn main :args () :ret i64
   :body
-  (const a 10)
-  (const b 20)
-  (print (mean a b))
-  0)
+  (const a (* 5 4))
+  (const b (* 2 1))
+  (const c (/ a b))
+  (print a)
+  (print b)
+  (print c))
