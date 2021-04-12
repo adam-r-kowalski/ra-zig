@@ -441,6 +441,29 @@ fn codegenDivide(context: Context, call: Call) !void {
     }
 }
 
+fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !void {
+    if (context.entities.literals.get(entity)) |value| {
+        switch (context.entities.types.get(entity).?) {
+            @enumToInt(Builtins.Int) => {
+                const interned = context.entities.interned_strings.data.items[value];
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
+                const quad_word = try internString(context.entities, buffer);
+                try context.x86.quad_words.insert(quad_word);
+                try opSseRegRelQuadWord(context, .Movsd, register, quad_word);
+            },
+            @enumToInt(Builtins.Float) => {
+                try context.x86.quad_words.insert(value);
+                try opSseRegRelQuadWord(context, .Movsd, register, value);
+            },
+            else => unreachable,
+        }
+    } else if (context.stack.entity.get(entity)) |offset| {
+        try opSseRegStack(context, .Movsd, register, offset);
+    } else {
+        unreachable;
+    }
+}
+
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
     const name = nameOf(context, call.function_entity).?;
@@ -480,8 +503,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                         },
                         @enumToInt(Builtins.F64) => {
                             assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
-                            const offset = try sseEntityStackOffset(context, argument_entity);
-                            try opSseRegStack(context, .Movsd, float_registers[argument_index], offset);
+                            try moveToSseRegister(context, float_registers[argument_index], argument_entity);
                         },
                         else => unreachable,
                     }
