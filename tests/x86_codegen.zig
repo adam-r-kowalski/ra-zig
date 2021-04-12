@@ -958,7 +958,7 @@ test "two user defined functions taking ints" {
     );
 }
 
-test "call user defined function twice" {
+test "call user defined int function twice" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
@@ -1147,6 +1147,71 @@ test "user defined function two floats" {
         \\    movsd qword [rbp-40], xmm0
         \\    movsd xmm0, qword [rbp-40]
         \\    add rsp, 40
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "call user defined function float function twice" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x f64)) :ret f64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (square 6.4))
+        \\  (const b (square 10.4))
+        \\  5)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word21: dq 10.4
+        \\quad_word19: dq 6.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    movsd xmm0, [rel quad_word19]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd xmm0, [rel quad_word21]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm0
+        \\    mov rdi, 5
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd xmm0, qword [rbp-8]
+        \\    movsd xmm1, qword [rbp-8]
+        \\    mulsd xmm0, xmm1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm0
+        \\    movsd xmm0, qword [rbp-16]
+        \\    add rsp, 16
         \\    pop rbp
         \\    ret
     );

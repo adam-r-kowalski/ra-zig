@@ -602,22 +602,34 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                 assert(parameter_types.len == call.argument_entities.len);
                 for (parameter_types) |parameter_type, argument_index| {
                     assert(argument_index < int_registers.len);
-                    assert(parameter_type == @enumToInt(Builtins.I64));
                     const argument_entity = call.argument_entities[argument_index];
                     const argument_type = context.entities.types.get(argument_entity).?;
-                    assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                    const offset = try entityStackOffset(context, argument_entity);
-                    try opRegStack(context, .Mov, int_registers[argument_index], offset);
+                    switch (parameter_type) {
+                        @enumToInt(Builtins.I64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                            const offset = try entityStackOffset(context, argument_entity);
+                            try opRegStack(context, .Mov, int_registers[argument_index], offset);
+                        },
+                        @enumToInt(Builtins.F64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
+                            try moveToSseRegister(context, float_registers[argument_index], argument_entity);
+                        },
+                        else => unreachable,
+                    }
                 }
                 const block_index = context.entities.overloads.block.items[overload_index];
                 try opLabel(context, .Call, block_index);
                 const eight = try internInt(context, 8);
                 try opRegLiteral(context, .Sub, .Rsp, eight);
                 context.stack.top += 8;
-                try opStackReg(context, .Mov, context.stack.top, .Rax);
                 try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
                 const return_type = context.entities.overloads.return_type.items[overload_index];
                 try context.entities.types.putNoClobber(call.result_entity, return_type);
+                switch (return_type) {
+                    @enumToInt(Builtins.I64) => try opStackReg(context, .Mov, context.stack.top, .Rax),
+                    @enumToInt(Builtins.F64) => try opStackSseReg(context, .Movsd, context.stack.top, .Xmm0),
+                    else => unreachable,
+                }
             }
         },
     }
