@@ -3,16 +3,17 @@ const assert = std.debug.assert;
 const Arena = std.heap.ArenaAllocator;
 const Allocator = std.mem.Allocator;
 const data = @import("data.zig");
-const InternedStrings = data.interned_strings.InternedStrings;
-const InternedString = data.interned_strings.InternedString;
-const internString = data.interned_strings.internString;
-const Strings = data.interned_strings.Strings;
+const InternedStrings = data.entity.InternedStrings;
+const InternedString = data.entity.InternedString;
+const internString = data.entity.internString;
+const Strings = data.entity.Strings;
+const Entity = data.entity.Entity;
+const Entities = data.entity.Entities;
+const Builtins = data.entity.Builtins;
 const DeclarationKind = data.ir.DeclarationKind;
 const IrBlock = data.ir.Block;
 const Ir = data.ir.Ir;
-const Builtins = data.ir.Builtins;
 const Overload = data.ir.Overload;
-const Entity = data.ir.Entity;
 const Call = data.ir.Call;
 const X86 = data.x86.X86;
 const X86Block = data.x86.Block;
@@ -32,7 +33,6 @@ const I64 = @enumToInt(Builtins.I64);
 const Float = @enumToInt(Builtins.Float);
 const F64 = @enumToInt(Builtins.F64);
 
-const InternedInt = usize;
 const InternedInts = Map(usize, InternedString);
 
 const Context = struct {
@@ -43,16 +43,16 @@ const Context = struct {
     ir: *const Ir,
     ir_block: *const IrBlock,
     stack: *Stack,
-    interned_strings: *InternedStrings,
+    entities: *Entities,
     interned_ints: *InternedInts,
 };
 
-fn internInt(context: Context, value: usize) !InternedInt {
+fn internInt(context: Context, value: usize) !InternedString {
     if (context.interned_ints.get(value)) |interned| {
         return interned;
     }
     const buffer = try std.fmt.allocPrint(context.allocator, "{}", .{value});
-    const interned = try internString(context.interned_strings, buffer);
+    const interned = try internString(context.entities, buffer);
     try context.interned_ints.putNoClobber(value, interned);
     return interned;
 }
@@ -183,6 +183,16 @@ fn opReg(context: Context, op: Instruction, reg: Register) !void {
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opStack(context: Context, op: Instruction, offset: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 1);
+    operand_kinds[0] = .StackOffset;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 1);
+    operands[0] = offset;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opSseRegRelQuadWord(context: Context, op: Instruction, to: SseRegister, quad_word: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
@@ -229,20 +239,6 @@ fn restoreStack(context: Context, offset: usize) !void {
     context.stack.top -= offset;
 }
 
-fn typeOf(context: Context, entity: Entity) !Entity {
-    if (context.x86.types.get(entity)) |type_entity|
-        return type_entity;
-    if (context.ir.entities.kinds.get(entity)) |kind| {
-        const type_entity = @enumToInt(switch (kind) {
-            .Int => Builtins.Int,
-            .Float => Builtins.Float,
-        });
-        try context.x86.types.putNoClobber(entity, type_entity);
-        return type_entity;
-    }
-    unreachable;
-}
-
 fn nameOf(context: Context, entity: Entity) ?InternedString {
     switch (entity) {
         @enumToInt(Builtins.Int) => return @enumToInt(Strings.Int),
@@ -250,21 +246,20 @@ fn nameOf(context: Context, entity: Entity) ?InternedString {
         @enumToInt(Builtins.Float) => return @enumToInt(Strings.Float),
         @enumToInt(Builtins.F64) => return @enumToInt(Strings.F64),
         else => {
-            if (context.ir.entities.names.get(entity)) |name| return name;
+            if (context.entities.names.get(entity)) |name| return name;
             return null;
         },
     }
 }
 
 fn codegenPrintI64(context: Context, call: Call) !void {
-    const argument_offset = try entityStackOffset(context, call.argument_entities[0]);
-    try opRegStack(context, .Mov, .Rsi, argument_offset);
-    const format_string = try internString(context.interned_strings, "\"%ld\", 10, 0");
+    try moveToRegister(context, .Rsi, call.argument_entities[0]);
+    const format_string = try internString(context.entities, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
-    const printf = try internString(context.interned_strings, "_printf");
+    const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
     try restoreStack(context, align_offset);
@@ -274,19 +269,18 @@ fn codegenPrintI64(context: Context, call: Call) !void {
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, result_offset, .Rax);
-    try context.x86.types.putNoClobber(call.result_entity, I64);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
-    const argument_offset = try sseEntityStackOffset(context, call.argument_entities[0]);
-    try opSseRegStack(context, .Movsd, .Xmm0, argument_offset);
-    const format_string = try internString(context.interned_strings, "\"%f\", 10, 0");
+    try moveToSseRegister(context, .Xmm0, call.argument_entities[0]);
+    const format_string = try internString(context.entities, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     const one = try internInt(context, 1);
     try opRegLiteral(context, .Mov, .Rax, one);
     const align_offset = try alignStackTo16Bytes(context);
-    const printf = try internString(context.interned_strings, "_printf");
+    const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
     try opLiteral(context, .Call, printf);
     try restoreStack(context, align_offset);
@@ -296,13 +290,13 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, result_offset, .Rax);
-    try context.x86.types.putNoClobber(call.result_entity, I64);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenPrint(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 1);
     const argument = call.argument_entities[0];
-    switch (try typeOf(context, argument)) {
+    switch (context.entities.types.get(argument).?) {
         Int, I64 => try codegenPrintI64(context, call),
         Float, F64 => try codegenPrintF64(context, call),
         else => unreachable,
@@ -318,97 +312,108 @@ const AddOps = BinaryOps{ .int = .Add, .float = .Addsd };
 const SubOps = BinaryOps{ .int = .Sub, .float = .Subsd };
 const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
-fn entityStackOffset(context: Context, entity: Entity) !usize {
-    if (context.stack.entity.get(entity)) |offset| {
-        return offset;
+fn moveToRegister(context: Context, register: Register, entity: Entity) !void {
+    if (context.entities.literals.get(entity)) |value| {
+        assert(context.entities.types.get(entity).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, register, value);
+    } else if (context.stack.entity.get(entity)) |offset| {
+        try opRegStack(context, .Mov, register, offset);
+    } else {
+        unreachable;
     }
-    if (context.ir.entities.values.get(entity)) |value| {
-        context.stack.top += 8;
-        const offset = context.stack.top;
-        try context.stack.entity.putNoClobber(entity, offset);
-        const eight = try internInt(context, 8);
-        try opRegLiteral(context, .Sub, .Rsp, eight);
-        try opStackLiteral(context, .Mov, offset, value);
-        return offset;
-    }
-    unreachable;
 }
 
-fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
-    if (context.stack.entity.get(entity)) |offset| {
-        return offset;
-    }
-    if (context.ir.entities.values.get(entity)) |value| {
-        context.stack.top += 8;
-        const offset = context.stack.top;
-        try context.stack.entity.putNoClobber(entity, offset);
-        const eight = try internInt(context, 8);
-        try opRegLiteral(context, .Sub, .Rsp, eight);
-        switch (context.ir.entities.kinds.get(entity).?) {
-            .Int => {
-                const interned = context.interned_strings.data.items[value];
+fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !void {
+    if (context.entities.literals.get(entity)) |value| {
+        switch (context.entities.types.get(entity).?) {
+            @enumToInt(Builtins.Int) => {
+                const interned = context.entities.interned_strings.data.items[value];
                 const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
-                const quad_word = try internString(context.interned_strings, buffer);
+                const quad_word = try internString(context.entities, buffer);
                 try context.x86.quad_words.insert(quad_word);
-                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, quad_word);
-                try opStackSseReg(context, .Movsd, offset, .Xmm0);
+                try opSseRegRelQuadWord(context, .Movsd, register, quad_word);
             },
-            .Float => {
+            @enumToInt(Builtins.Float) => {
                 try context.x86.quad_words.insert(value);
-                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
-                try opStackSseReg(context, .Movsd, offset, .Xmm0);
+                try opSseRegRelQuadWord(context, .Movsd, register, value);
             },
+            else => unreachable,
         }
-        return offset;
+    } else if (context.stack.entity.get(entity)) |offset| {
+        try opSseRegStack(context, .Movsd, register, offset);
+    } else {
+        unreachable;
     }
-    unreachable;
 }
 
 fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try entityStackOffset(context, lhs);
-    const rhs_offset = try entityStackOffset(context, rhs);
-    try opRegStack(context, .Mov, .Rax, lhs_offset);
-    try opRegStack(context, .Mov, .Rcx, rhs_offset);
-    try opRegReg(context, op, .Rax, .Rcx);
+    try moveToRegister(context, .Rax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opRegReg(context, op, .Rax, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, op, .Rax, offset);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, offset, .Rax);
-    try context.x86.types.putNoClobber(call.result_entity, I64);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try sseEntityStackOffset(context, lhs);
-    const rhs_offset = try sseEntityStackOffset(context, rhs);
-    try opSseRegStack(context, .Movsd, .Xmm0, lhs_offset);
-    try opSseRegStack(context, .Movsd, .Xmm1, rhs_offset);
-    try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
+    try moveToSseRegister(context, .Xmm0, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        switch (context.entities.types.get(rhs).?) {
+            @enumToInt(Builtins.Int) => {
+                const interned = context.entities.interned_strings.data.items[value];
+                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
+                const quad_word = try internString(context.entities, buffer);
+                try context.x86.quad_words.insert(quad_word);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm1, quad_word);
+            },
+            @enumToInt(Builtins.Float) => {
+                try context.x86.quad_words.insert(value);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm1, value);
+            },
+            else => unreachable,
+        }
+        try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opSseRegStack(context, .Movsd, .Xmm1, offset);
+        try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackSseReg(context, .Movsd, offset, .Xmm0);
-    try context.x86.types.putNoClobber(call.result_entity, F64);
+    try context.entities.types.putNoClobber(call.result_entity, F64);
 }
 
 fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
     assert(call.argument_entities.len == 2);
     const lhs = call.argument_entities[0];
     const rhs = call.argument_entities[1];
-    switch (try typeOf(context, lhs)) {
-        Int => switch (try typeOf(context, rhs)) {
+    switch (context.entities.types.get(lhs).?) {
+        Int => switch (context.entities.types.get(rhs).?) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
             Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
             else => unreachable,
         },
-        I64 => switch (try typeOf(context, rhs)) {
+        I64 => switch (context.entities.types.get(rhs).?) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
             else => unreachable,
         },
-        Float, F64 => switch (try typeOf(context, rhs)) {
+        Float, F64 => switch (context.entities.types.get(rhs).?) {
             Int, Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
             else => unreachable,
         },
@@ -417,36 +422,41 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
 }
 
 fn codegenDivideIntInt(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
-    const lhs_offset = try entityStackOffset(context, lhs);
-    const rhs_offset = try entityStackOffset(context, rhs);
-    try opRegStack(context, .Mov, .Rax, lhs_offset);
-    try opRegStack(context, .Mov, .Rcx, rhs_offset);
+    try moveToRegister(context, .Rax, lhs);
     try opNoArgs(context.x86_block, .Cqo);
-    try opReg(context, .Idiv, .Rcx);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opReg(context, .Idiv, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opStack(context, .Idiv, offset);
+    } else {
+        unreachable;
+    }
     context.stack.top += 8;
     const offset = context.stack.top;
     try context.stack.entity.putNoClobber(call.result_entity, offset);
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, offset, .Rax);
-    try context.x86.types.putNoClobber(call.result_entity, I64);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenDivide(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 2);
     const lhs = call.argument_entities[0];
     const rhs = call.argument_entities[1];
-    switch (try typeOf(context, lhs)) {
-        Int => switch (try typeOf(context, rhs)) {
+    switch (context.entities.types.get(lhs).?) {
+        Int => switch (context.entities.types.get(rhs).?) {
             Int, I64 => try codegenDivideIntInt(context, call, lhs, rhs),
             Float, F64 => try codegenBinaryOpFloatFloat(context, call, .Divsd, lhs, rhs),
             else => unreachable,
         },
-        I64 => switch (try typeOf(context, rhs)) {
+        I64 => switch (context.entities.types.get(rhs).?) {
             Int, I64 => try codegenDivideIntInt(context, call, lhs, rhs),
             else => unreachable,
         },
-        Float, F64 => switch (try typeOf(context, rhs)) {
+        Float, F64 => switch (context.entities.types.get(rhs).?) {
             Int, Float, F64 => try codegenBinaryOpFloatFloat(context, call, .Divsd, lhs, rhs),
             else => unreachable,
         },
@@ -466,88 +476,160 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
-            const overloads = context.ir.functions.items[context.ir.indices.items[index]];
-            assert(overloads.length == 1);
-            const overload = &overloads.items[0];
-            const type_block_indices = overload.parameter_type_block_indices;
-            assert(type_block_indices.len == call.argument_entities.len);
-            const integer_argument_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
-            const parameter_entities = overload.parameter_entities;
-            for (type_block_indices) |type_block_index, argument_index| {
-                assert(argument_index < integer_argument_registers.len);
-                const type_block = &overload.blocks.items[type_block_index];
-                assert(type_block.kinds.length == 1);
-                assert(type_block.kinds.items[0] == .Return);
-                const parameter_type = type_block.returns.items[type_block.indices.items[0]];
-                assert(parameter_type == @enumToInt(Builtins.I64));
-                const argument_entity = call.argument_entities[argument_index];
-                const argument_type = try typeOf(context, argument_entity);
-                assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                const offset = try entityStackOffset(context, argument_entity);
-                try opRegStack(context, .Mov, integer_argument_registers[argument_index], offset);
-                try context.x86.types.putNoClobber(parameter_entities[argument_index], parameter_type);
-            }
-            const x86_block_result = try context.x86.blocks.addOne();
-            try opLabel(context, .Call, x86_block_result.index);
-            const eight = try internInt(context, 8);
-            try opRegLiteral(context, .Sub, .Rsp, eight);
-            context.stack.top += 8;
-            try opStackReg(context, .Mov, context.stack.top, .Rax);
-            try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
-            const return_type_block = &overload.blocks.items[overload.return_type_block_index];
-            assert(return_type_block.kinds.length == 1);
-            assert(return_type_block.kinds.items[0] == .Return);
-            const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
-            try context.x86.types.putNoClobber(call.result_entity, return_type);
-            const x86_block = x86_block_result.ptr;
-            x86_block.instructions = List(Instruction).init(context.allocator);
-            x86_block.operand_kinds = List([]const Kind).init(context.allocator);
-            x86_block.operands = List([]const usize).init(context.allocator);
-            var stack = Stack{
-                .entity = Map(Entity, usize).init(context.allocator),
-                .top = 0,
-            };
-            const overload_context = Context{
-                .allocator = context.allocator,
-                .overload = overload,
-                .x86 = context.x86,
-                .x86_block = x86_block,
-                .ir = context.ir,
-                .ir_block = &overload.blocks.items[overload.body_block_index],
-                .stack = &stack,
-                .interned_strings = context.interned_strings,
-                .interned_ints = context.interned_ints,
-            };
-            try opReg(overload_context, .Push, .Rbp);
-            try opRegReg(overload_context, .Mov, .Rbp, .Rsp);
-            const parameter_offset = parameter_entities.len * 8;
-            const interned_int = try internInt(overload_context, parameter_offset);
-            overload_context.stack.top = parameter_offset;
-            try opRegLiteral(overload_context, .Sub, .Rsp, interned_int);
-            for (parameter_entities) |parameter_entity, i| {
-                const offset = (i + 1) * 8;
-                try opStackReg(overload_context, .Mov, offset, integer_argument_registers[i]);
-                try overload_context.stack.entity.putNoClobber(parameter_entity, offset);
-            }
-            for (overload_context.ir_block.kinds.slice()) |expression_kind, i| {
-                switch (expression_kind) {
-                    .Return => {
-                        const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
-                        if (stack.entity.get(ret)) |offset| {
-                            try opRegStack(overload_context, .Mov, .Rax, offset);
-                        } else if (context.ir.entities.values.get(ret)) |value| {
-                            try opRegLiteral(overload_context, .Mov, .Rax, value);
-                        } else {
-                            unreachable;
-                        }
-                        if (overload_context.stack.top > 0) {
-                            const offset = try internInt(overload_context, overload_context.stack.top);
-                            try opRegLiteral(overload_context, .Add, .Rsp, offset);
-                        }
-                        try opReg(overload_context, .Pop, .Rbp);
-                        try opNoArgs(x86_block, .Ret);
-                    },
-                    .Call => try codegenCall(overload_context, i),
+            const function = &context.ir.functions.items[context.ir.indices.items[index]];
+            assert(function.overloads.length == 1);
+            const overload = &function.overloads.items[0];
+            const overload_index = context.entities.overload_index.get(function.entities.items[0]).?;
+            const int_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
+            const float_registers = [_]SseRegister{ .Xmm0, .Xmm1, .Xmm2, .Xmm3, .Xmm4, .Xmm5 };
+            if (context.entities.overloads.status.items[overload_index] == .Unanalyzed) {
+                const type_block_indices = overload.parameter_type_block_indices;
+                assert(type_block_indices.len == call.argument_entities.len);
+                const parameter_entities = overload.parameter_entities;
+                const parameter_types = try context.allocator.alloc(Entity, parameter_entities.len);
+                for (type_block_indices) |type_block_index, argument_index| {
+                    assert(argument_index < int_registers.len);
+                    const type_block = &overload.blocks.items[type_block_index];
+                    assert(type_block.kinds.length == 1);
+                    assert(type_block.kinds.items[0] == .Return);
+                    const parameter_type = type_block.returns.items[type_block.indices.items[0]];
+                    const argument_entity = call.argument_entities[argument_index];
+                    const argument_type = context.entities.types.get(argument_entity).?;
+                    switch (parameter_type) {
+                        @enumToInt(Builtins.I64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                            try moveToRegister(context, int_registers[argument_index], argument_entity);
+                        },
+                        @enumToInt(Builtins.F64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
+                            try moveToSseRegister(context, float_registers[argument_index], argument_entity);
+                        },
+                        else => unreachable,
+                    }
+                    try context.entities.types.putNoClobber(parameter_entities[argument_index], parameter_type);
+                    parameter_types[argument_index] = parameter_type;
+                }
+                const x86_block_result = try context.x86.blocks.addOne();
+                const align_offset = try alignStackTo16Bytes(context);
+                try opLabel(context, .Call, x86_block_result.index);
+                try restoreStack(context, align_offset);
+                const return_type_block = &overload.blocks.items[overload.return_type_block_index];
+                assert(return_type_block.kinds.length == 1);
+                assert(return_type_block.kinds.items[0] == .Return);
+                const return_type = return_type_block.returns.items[return_type_block.indices.items[0]];
+                const eight = try internInt(context, 8);
+                try opRegLiteral(context, .Sub, .Rsp, eight);
+                context.stack.top += 8;
+                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
+                switch (return_type) {
+                    @enumToInt(Builtins.I64) => try opStackReg(context, .Mov, context.stack.top, .Rax),
+                    @enumToInt(Builtins.F64) => try opStackSseReg(context, .Movsd, context.stack.top, .Xmm0),
+                    else => unreachable,
+                }
+                try context.entities.types.putNoClobber(call.result_entity, return_type);
+                context.entities.overloads.parameter_types.items[overload_index] = parameter_types;
+                context.entities.overloads.return_type.items[overload_index] = return_type;
+                context.entities.overloads.block.items[overload_index] = x86_block_result.index;
+                context.entities.overloads.status.items[overload_index] = .Analyzed;
+                const x86_block = x86_block_result.ptr;
+                x86_block.instructions = List(Instruction).init(context.allocator);
+                x86_block.operand_kinds = List([]const Kind).init(context.allocator);
+                x86_block.operands = List([]const usize).init(context.allocator);
+                var stack = Stack{
+                    .entity = Map(Entity, usize).init(context.allocator),
+                    .top = 0,
+                };
+                const overload_context = Context{
+                    .allocator = context.allocator,
+                    .overload = overload,
+                    .x86 = context.x86,
+                    .x86_block = x86_block,
+                    .ir = context.ir,
+                    .ir_block = &overload.blocks.items[overload.body_block_index],
+                    .stack = &stack,
+                    .entities = context.entities,
+                    .interned_ints = context.interned_ints,
+                };
+                try opReg(overload_context, .Push, .Rbp);
+                try opRegReg(overload_context, .Mov, .Rbp, .Rsp);
+                const parameter_offset = parameter_entities.len * 8;
+                const interned_int = try internInt(overload_context, parameter_offset);
+                overload_context.stack.top = parameter_offset;
+                try opRegLiteral(overload_context, .Sub, .Rsp, interned_int);
+                for (parameter_entities) |parameter_entity, i| {
+                    const offset = (i + 1) * 8;
+                    switch (parameter_types[i]) {
+                        @enumToInt(Builtins.I64) => try opStackReg(overload_context, .Mov, offset, int_registers[i]),
+                        @enumToInt(Builtins.F64) => try opStackSseReg(overload_context, .Movsd, offset, float_registers[i]),
+                        else => unreachable,
+                    }
+                    try overload_context.stack.entity.putNoClobber(parameter_entity, offset);
+                }
+                for (overload_context.ir_block.kinds.slice()) |expression_kind, i| {
+                    switch (expression_kind) {
+                        .Return => {
+                            const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
+                            if (stack.entity.get(ret)) |offset| {
+                                switch (return_type) {
+                                    @enumToInt(Builtins.I64) => try opRegStack(overload_context, .Mov, .Rax, offset),
+                                    @enumToInt(Builtins.F64) => try opSseRegStack(overload_context, .Movsd, .Xmm0, offset),
+                                    else => unreachable,
+                                }
+                            } else if (context.entities.literals.get(ret)) |value| {
+                                switch (return_type) {
+                                    @enumToInt(Builtins.I64) => try opRegLiteral(overload_context, .Mov, .Rax, value),
+                                    @enumToInt(Builtins.F64) => {
+                                        try context.x86.quad_words.insert(value);
+                                        try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
+                                    },
+                                    else => unreachable,
+                                }
+                            } else {
+                                unreachable;
+                            }
+                            if (overload_context.stack.top > 0) {
+                                const offset = try internInt(overload_context, overload_context.stack.top);
+                                try opRegLiteral(overload_context, .Add, .Rsp, offset);
+                            }
+                            try opReg(overload_context, .Pop, .Rbp);
+                            try opNoArgs(x86_block, .Ret);
+                        },
+                        .Call => try codegenCall(overload_context, i),
+                        else => unreachable,
+                    }
+                }
+            } else {
+                const parameter_types = context.entities.overloads.parameter_types.items[overload_index];
+                assert(parameter_types.len == call.argument_entities.len);
+                for (parameter_types) |parameter_type, argument_index| {
+                    assert(argument_index < int_registers.len);
+                    const argument_entity = call.argument_entities[argument_index];
+                    const argument_type = context.entities.types.get(argument_entity).?;
+                    switch (parameter_type) {
+                        @enumToInt(Builtins.I64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
+                            try moveToRegister(context, int_registers[argument_index], argument_entity);
+                        },
+                        @enumToInt(Builtins.F64) => {
+                            assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
+                            try moveToSseRegister(context, float_registers[argument_index], argument_entity);
+                        },
+                        else => unreachable,
+                    }
+                }
+                const block_index = context.entities.overloads.block.items[overload_index];
+                const align_offset = try alignStackTo16Bytes(context);
+                try opLabel(context, .Call, block_index);
+                try restoreStack(context, align_offset);
+                const eight = try internInt(context, 8);
+                try opRegLiteral(context, .Sub, .Rsp, eight);
+                context.stack.top += 8;
+                try context.stack.entity.putNoClobber(call.result_entity, context.stack.top);
+                const return_type = context.entities.overloads.return_type.items[overload_index];
+                try context.entities.types.putNoClobber(call.result_entity, return_type);
+                switch (return_type) {
+                    @enumToInt(Builtins.I64) => try opStackReg(context, .Mov, context.stack.top, .Rax),
+                    @enumToInt(Builtins.F64) => try opStackSseReg(context, .Movsd, context.stack.top, .Xmm0),
                     else => unreachable,
                 }
             }
@@ -555,20 +637,20 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     }
 }
 
-fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
-    const name = interned_strings.mapping.get("main").?;
+fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
+    const name = entities.interned_strings.mapping.get("main").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
     assert(declaration_kind == DeclarationKind.Function);
     assert(name == ir.names.items[index]);
-    const overloads = ir.functions.items[ir.indices.items[index]];
-    assert(overloads.length == 1);
+    const function = &ir.functions.items[ir.indices.items[index]];
+    assert(function.overloads.length == 1);
     const allocator = &x86.arena.allocator;
     const x86_block = (try x86.blocks.addOne()).ptr;
     x86_block.instructions = List(Instruction).init(allocator);
     x86_block.operand_kinds = List([]const Kind).init(allocator);
     x86_block.operands = List([]const usize).init(allocator);
-    const overload = &overloads.items[0];
+    const overload = &function.overloads.items[0];
     var stack = Stack{
         .entity = Map(Entity, usize).init(allocator),
         .top = 0,
@@ -582,7 +664,7 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
         .ir = &ir,
         .ir_block = &overload.blocks.items[overload.body_block_index],
         .stack = &stack,
-        .interned_strings = interned_strings,
+        .entities = entities,
         .interned_ints = &interned_ints,
     };
     try opRegReg(context, .Mov, .Rbp, .Rsp);
@@ -592,12 +674,12 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
                 if (stack.entity.get(ret)) |offset| {
                     try opRegStack(context, .Mov, .Rdi, offset);
-                } else if (context.ir.entities.values.get(ret)) |value| {
+                } else if (context.entities.literals.get(ret)) |value| {
                     try opRegLiteral(context, .Mov, .Rdi, value);
                 } else {
                     unreachable;
                 }
-                const sys_exit = try internString(interned_strings, "0x02000001");
+                const sys_exit = try internString(entities, "0x02000001");
                 try opRegLiteral(context, .Mov, .Rax, sys_exit);
                 try opNoArgs(x86_block, .Syscall);
             },
@@ -607,18 +689,17 @@ fn codegenMain(x86: *X86, ir: Ir, interned_strings: *InternedStrings) !void {
     }
 }
 
-pub fn codegen(allocator: *Allocator, ir: Ir, interned_strings: *InternedStrings) !X86 {
+pub fn codegen(allocator: *Allocator, entities: *Entities, ir: Ir) !X86 {
     const arena = try allocator.create(Arena);
     arena.* = Arena.init(allocator);
     var x86 = X86{
         .arena = arena,
-        .types = Map(Entity, Entity).init(&arena.allocator),
         .externs = Set(InternedString).init(&arena.allocator),
         .bytes = Set(InternedString).init(&arena.allocator),
         .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
-    try codegenMain(&x86, ir, interned_strings);
+    try codegenMain(&x86, entities, ir);
     return x86;
 }
 
@@ -694,14 +775,14 @@ fn writeSseRegister(output: *List(u8), register: SseRegister) !void {
     }
 }
 
-pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStrings) !List(u8) {
+pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
     try output.insertSlice("    global _main\n");
     var extern_iterator = x86.externs.iterator();
     while (extern_iterator.next()) |entry| {
         try output.insertSlice("    extern ");
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     if ((x86.bytes.count() + x86.quad_words.count()) > 0) {
@@ -710,13 +791,13 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
     var byte_iterator = x86.bytes.iterator();
     while (byte_iterator.next()) |entry| {
         try output.insertFormatted("byte{}: db ", .{entry.key});
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     var quad_word_iterator = x86.quad_words.iterator();
     while (quad_word_iterator.next()) |entry| {
         try output.insertFormatted("quad_word{}: dq ", .{entry.key});
-        try output.insertSlice(interned_strings.data.items[entry.key]);
+        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
     try output.insertSlice(
@@ -742,7 +823,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, interned_strings: InternedStri
                     .Register => try writeRegister(&output, @intToEnum(Register, operands[k])),
                     .SseRegister => try writeSseRegister(&output, @intToEnum(SseRegister, operands[k])),
                     .Label => try writeLabel(&output, operands[k]),
-                    .Literal => try output.insertSlice(interned_strings.data.items[operands[k]]),
+                    .Literal => try output.insertSlice(entities.interned_strings.data.items[operands[k]]),
                     .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
                     .QuadWord => try output.insertFormatted("quad_word{}", .{operands[k]}),
                     .RelativeQuadWord => try output.insertFormatted("[rel quad_word{}]", .{operands[k]}),

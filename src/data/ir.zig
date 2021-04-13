@@ -66,7 +66,10 @@ pub const Overload = struct {
     blocks: List(Block),
 };
 
-pub const Function = List(Overload);
+pub const Function = struct {
+    overloads: List(Overload),
+    entities: List(usize),
+};
 
 pub const DeclarationKind = enum(u8) {
     Function,

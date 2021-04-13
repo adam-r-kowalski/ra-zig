@@ -25,19 +25,19 @@ pub fn main() anyerror!void {
     const source = try source_file.readToEndAlloc(temp_allocator, std.math.maxInt(usize));
     defer temp_allocator.free(source);
     const t3 = timer.read();
-    var interned_strings = try lang.data.interned_strings.prime(allocator);
-    defer interned_strings.deinit();
+    var entities = try lang.data.Entities.init(allocator);
+    defer entities.deinit();
     const t4 = timer.read();
-    var ast = try lang.parse(allocator, &interned_strings, source);
+    var ast = try lang.parse(allocator, &entities, source);
     defer ast.deinit();
     const t5 = timer.read();
-    var ir = try lang.lower(allocator, ast);
+    var ir = try lang.lower(allocator, &entities, ast);
     defer ir.deinit();
     const t6 = timer.read();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
     const t7 = timer.read();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     const t8 = timer.read();
     const asm_file = try cwd.createFile("temp/code.asm", .{});
@@ -54,32 +54,32 @@ pub fn main() anyerror!void {
         .argv = &[_][]const u8{ "ld", "temp/code.o", "-lSystem", "-o", "temp/code" },
     });
     const t11 = timer.read();
-    // std.debug.print(
-    //     \\initialize allocator  {}
-    //     \\collecting args       {}
-    //     \\reading source file   {}
-    //     \\init interned strings {}
-    //     \\parsing               {}
-    //     \\lowering              {}
-    //     \\codegen               {}
-    //     \\x86 string            {}
-    //     \\writing asm file      {}
-    //     \\nasm                  {}
-    //     \\ld                    {}
-    //     \\total                 {}
-    //     \\
-    // , .{
-    //     t1 - t0,
-    //     t2 - t1,
-    //     t3 - t2,
-    //     t4 - t3,
-    //     t5 - t4,
-    //     t6 - t5,
-    //     t7 - t6,
-    //     t8 - t7,
-    //     t9 - t8,
-    //     t10 - t9,
-    //     t11 - t10,
-    //     t11 - t0,
-    // });
+    std.debug.print(
+        \\initialize allocator  {}
+        \\collecting args       {}
+        \\reading source file   {}
+        \\init entities {}
+        \\parsing               {}
+        \\lowering              {}
+        \\codegen               {}
+        \\x86 string            {}
+        \\writing asm file      {}
+        \\nasm                  {}
+        \\ld                    {}
+        \\total                 {}
+        \\
+    , .{
+        t1 - t0,
+        t2 - t1,
+        t3 - t2,
+        t4 - t3,
+        t5 - t4,
+        t6 - t5,
+        t7 - t6,
+        t8 - t7,
+        t9 - t8,
+        t10 - t9,
+        t11 - t10,
+        t11 - t0,
+    });
 }

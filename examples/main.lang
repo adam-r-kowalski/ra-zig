@@ -1,23 +1,21 @@
-(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
-  :body (/ (- y2 y1) (- x2 x1)))
+(fn meani64 :args ((x i64) (y i64)) :ret i64
+  :body (/ (+ x y) 2))
 
 
-(fn square :args ((x i64)) :ret i64
-  :body (* x x))
-
-
-(fn mean :args ((x i64) (y i64)) :ret i64
+(fn meanf64 :args ((x f64) (y f64)) :ret f64
   :body (/ (+ x y) 2))
 
 
 (fn main :args () :ret i64
   :body
-  (const x1 5)
-  (const x2 10)
-  (const y1 15)
-  (const y2 30)
-  (const a (slope x1 x2 y1 y2))
+  (const a (meani64 7 10))
+  (const b (meani64 4 5))
   (print a)
-  (const b (square a))
   (print b)
-  (mean x2 y2))
+  (print (meani64 a b))
+  (const c (meanf64 7 10))
+  (const d (meanf64 4 5))
+  (print c)
+  (print d)
+  (print (meanf64 c d))
+  0)

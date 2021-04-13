@@ -14,14 +14,14 @@ test "trivial" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source = "(fn main :args () :ret i64 :body 42)";
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
-    interned_strings.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
     x86.deinit();
     const expected =
         \\    global _main
@@ -52,15 +52,15 @@ test "binary op between two signed integers" {
             \\  (const y 15)
             \\  ({s} x y))
         , .{op});
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
@@ -69,16 +69,12 @@ test "binary op between two signed integers" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
-            \\    mov qword [rbp-8], 10
-            \\    sub rsp, 8
-            \\    mov qword [rbp-16], 15
-            \\    mov rax, qword [rbp-8]
-            \\    mov rcx, qword [rbp-16]
+            \\    mov rax, 10
+            \\    mov rcx, 15
             \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-24], rax
-            \\    mov rdi, qword [rbp-24]
+            \\    mov qword [rbp-8], rax
+            \\    mov rdi, qword [rbp-8]
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -104,15 +100,15 @@ test "binary op between three signed integers" {
             \\  (const d 20)
             \\  ({s} c d))
         , .{ op, op });
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
@@ -121,23 +117,17 @@ test "binary op between three signed integers" {
             \\
             \\_main:
             \\    mov rbp, rsp
+            \\    mov rax, 10
+            \\    mov rcx, 15
+            \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-8], 10
-            \\    sub rsp, 8
-            \\    mov qword [rbp-16], 15
+            \\    mov qword [rbp-8], rax
             \\    mov rax, qword [rbp-8]
-            \\    mov rcx, qword [rbp-16]
+            \\    mov rcx, 20
             \\    {s} rax, rcx
             \\    sub rsp, 8
-            \\    mov qword [rbp-24], rax
-            \\    sub rsp, 8
-            \\    mov qword [rbp-32], 20
-            \\    mov rax, qword [rbp-24]
-            \\    mov rcx, qword [rbp-32]
-            \\    {s} rax, rcx
-            \\    sub rsp, 8
-            \\    mov qword [rbp-40], rax
-            \\    mov rdi, qword [rbp-40]
+            \\    mov qword [rbp-16], rax
+            \\    mov rdi, qword [rbp-16]
             \\    mov rax, 0x02000001
             \\    syscall
         , .{ instructions[i], instructions[i] });
@@ -158,15 +148,15 @@ test "divide two signed integers" {
         \\  (const y 4)
         \\  (/ x y))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -175,17 +165,13 @@ test "divide two signed integers" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 20
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 4
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov rax, 20
         \\    cqo
+        \\    mov rcx, 4
         \\    idiv rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -206,15 +192,15 @@ test "binary op between two signed floats" {
             \\  (const z ({s} x y))
             \\  0)
         , .{op});
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
@@ -228,17 +214,11 @@ test "binary op between two signed floats" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word19]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -264,39 +244,33 @@ test "binary op between signed float and comptime int" {
             \\  (const z ({s} x y))
             \\  0)
         , .{op});
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
             \\
             \\    section .data
             \\
-            \\quad_word23: dq 30.0
+            \\quad_word22: dq 30.0
             \\quad_word17: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word23]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word22]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -322,39 +296,33 @@ test "binary op between comptime int and signed float" {
             \\  (const z ({s} x y))
             \\  0)
         , .{op});
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
             \\
             \\    section .data
             \\
-            \\quad_word23: dq 10.0
             \\quad_word19: dq 30.5
+            \\quad_word22: dq 10.0
             \\
             \\    section .text
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word23]
-            \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
-            \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm0, [rel quad_word22]
+            \\    movsd xmm1, [rel quad_word19]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
+            \\    movsd qword [rbp-8], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -381,15 +349,15 @@ test "binary op between three signed floats" {
             \\  (const d ({s} c 40.2))
             \\  0)
         , .{ op, op });
-        var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+        var entities = try lang.data.Entities.init(&gpa.allocator);
+        var ast = try lang.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, ast);
+        var ir = try lang.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, ir, &interned_strings);
+        var x86 = try lang.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, interned_strings);
-        interned_strings.deinit();
+        var x86_string = try lang.x86String(allocator, x86, entities);
+        entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
             \\    global _main
@@ -404,25 +372,16 @@ test "binary op between three signed floats" {
             \\
             \\_main:
             \\    mov rbp, rsp
-            \\    sub rsp, 8
             \\    movsd xmm0, [rel quad_word17]
+            \\    movsd xmm1, [rel quad_word19]
+            \\    {s} xmm0, xmm1
+            \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word19]
-            \\    movsd qword [rbp-16], xmm0
             \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, qword [rbp-16]
+            \\    movsd xmm1, [rel quad_word22]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
-            \\    movsd qword [rbp-24], xmm0
-            \\    sub rsp, 8
-            \\    movsd xmm0, [rel quad_word22]
-            \\    movsd qword [rbp-32], xmm0
-            \\    movsd xmm0, qword [rbp-24]
-            \\    movsd xmm1, qword [rbp-32]
-            \\    {s} xmm0, xmm1
-            \\    sub rsp, 8
-            \\    movsd qword [rbp-40], xmm0
+            \\    movsd qword [rbp-16], xmm0
             \\    mov rdi, 0
             \\    mov rax, 0x02000001
             \\    syscall
@@ -443,15 +402,15 @@ test "print a signed integer" {
         \\  (const a 12345)
         \\  (print a))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -459,21 +418,21 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\byte19: db "%ld", 10, 0
+        \\byte18: db "%ld", 10, 0
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 12345
-        \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte19
+        \\    mov rsi, 12345
+        \\    mov rdi, byte18
         \\    xor rax, rax
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -493,15 +452,15 @@ test "print three signed integers" {
         \\  (const c 30)
         \\  (print c))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -509,37 +468,35 @@ test "print three signed integers" {
         \\
         \\    section .data
         \\
-        \\byte23: db "%ld", 10, 0
+        \\byte22: db "%ld", 10, 0
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rsi, 10
+        \\    mov rdi, byte22
+        \\    xor rax, rax
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 10
-        \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte23
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rsi, 20
+        \\    mov rdi, byte22
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 20
-        \\    mov rsi, qword [rbp-24]
-        \\    mov rdi, byte23
+        \\    mov rsi, 30
+        \\    mov rdi, byte22
         \\    xor rax, rax
+        \\    sub rsp, 8
         \\    call _printf
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    sub rsp, 8
-        \\    mov qword [rbp-40], 30
-        \\    mov rsi, qword [rbp-40]
-        \\    mov rdi, byte23
-        \\    xor rax, rax
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -558,15 +515,15 @@ test "align stack before calling print" {
         \\  (const d (+ a b))
         \\  (print a))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -580,29 +537,25 @@ test "align stack before calling print" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 3
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 5
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov rax, 3
+        \\    mov rcx, 5
         \\    add rax, rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov qword [rbp-8], rax
+        \\    mov rax, 3
+        \\    mov rcx, 5
         \\    add rax, rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    mov rsi, qword [rbp-8]
+        \\    mov qword [rbp-16], rax
+        \\    mov rsi, 3
         \\    mov rdi, byte23
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -613,15 +566,15 @@ test "print a signed float" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source = "(fn main :args () :ret i64 :body (print 12.345))";
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -629,23 +582,22 @@ test "print a signed float" {
         \\
         \\    section .data
         \\
-        \\byte18: db "%f", 10, 0
+        \\byte17: db "%f", 10, 0
         \\quad_word16: dq 12.345
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word16]
-        \\    movsd qword [rbp-8], xmm0
-        \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte18
+        \\    mov rdi, byte17
         \\    mov rax, 1
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -665,15 +617,15 @@ test "print three signed floats" {
         \\  (const c 35.7)
         \\  (print c))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -681,7 +633,7 @@ test "print three signed floats" {
         \\
         \\    section .data
         \\
-        \\byte23: db "%f", 10, 0
+        \\byte22: db "%f", 10, 0
         \\quad_word21: dq 35.7
         \\quad_word19: dq 21.4
         \\quad_word17: dq 10.2
@@ -690,34 +642,29 @@ test "print three signed floats" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word17]
-        \\    movsd qword [rbp-8], xmm0
-        \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte23
+        \\    mov rdi, byte22
+        \\    mov rax, 1
+        \\    sub rsp, 8
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    movsd xmm0, [rel quad_word19]
+        \\    mov rdi, byte22
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word19]
-        \\    movsd qword [rbp-24], xmm0
-        \\    movsd xmm0, qword [rbp-24]
-        \\    mov rdi, byte23
-        \\    mov rax, 1
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word21]
-        \\    movsd qword [rbp-40], xmm0
-        \\    movsd xmm0, qword [rbp-40]
-        \\    mov rdi, byte23
+        \\    mov rdi, byte22
         \\    mov rax, 1
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -734,15 +681,15 @@ test "user defined function single int" {
         \\(fn main :args () :ret i64
         \\  :body (square 6))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -751,13 +698,13 @@ test "user defined function single int" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 6
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 6
-        \\    mov rdi, qword [rbp-8]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -767,8 +714,7 @@ test "user defined function single int" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-8]
-        \\    imul rax, rcx
+        \\    imul rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rax, qword [rbp-16]
@@ -789,15 +735,15 @@ test "user defined function four ints" {
         \\(fn main :args () :ret i64
         \\  :body (slope 0 10 5 20))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -806,22 +752,16 @@ test "user defined function four ints" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 0
+        \\    mov rsi, 10
+        \\    mov rdx, 5
+        \\    mov rcx, 20
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 0
-        \\    mov rdi, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 10
-        \\    mov rsi, qword [rbp-16]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 5
-        \\    mov rdx, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], 20
-        \\    mov rcx, qword [rbp-32]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -834,19 +774,16 @@ test "user defined function four ints" {
         \\    mov qword [rbp-24], rdx
         \\    mov qword [rbp-32], rcx
         \\    mov rax, qword [rbp-32]
-        \\    mov rcx, qword [rbp-24]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-24]
         \\    sub rsp, 8
         \\    mov qword [rbp-40], rax
         \\    mov rax, qword [rbp-16]
-        \\    mov rcx, qword [rbp-8]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-48], rax
         \\    mov rax, qword [rbp-40]
-        \\    mov rcx, qword [rbp-48]
         \\    cqo
-        \\    idiv rcx
+        \\    idiv qword [rbp-48]
         \\    sub rsp, 8
         \\    mov qword [rbp-56], rax
         \\    mov rax, qword [rbp-56]
@@ -872,15 +809,15 @@ test "two user defined functions taking ints" {
         \\  (const a (slope 0 10 5 20))
         \\  (square a))
     ;
-    var interned_strings = try lang.data.interned_strings.prime(&gpa.allocator);
-    defer interned_strings.deinit();
-    var ast = try lang.parse(&gpa.allocator, &interned_strings, source);
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, ast);
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, ir, &interned_strings);
+    var x86 = try lang.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, interned_strings);
+    var x86_string = try lang.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -889,26 +826,20 @@ test "two user defined functions taking ints" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 0
+        \\    mov rsi, 10
+        \\    mov rdx, 5
+        \\    mov rcx, 20
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 0
-        \\    mov rdi, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 10
-        \\    mov rsi, qword [rbp-16]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 5
-        \\    mov rdx, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], 20
-        \\    mov rcx, qword [rbp-32]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    call label2
         \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -921,19 +852,16 @@ test "two user defined functions taking ints" {
         \\    mov qword [rbp-24], rdx
         \\    mov qword [rbp-32], rcx
         \\    mov rax, qword [rbp-32]
-        \\    mov rcx, qword [rbp-24]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-24]
         \\    sub rsp, 8
         \\    mov qword [rbp-40], rax
         \\    mov rax, qword [rbp-16]
-        \\    mov rcx, qword [rbp-8]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-48], rax
         \\    mov rax, qword [rbp-40]
-        \\    mov rcx, qword [rbp-48]
         \\    cqo
-        \\    idiv rcx
+        \\    idiv qword [rbp-48]
         \\    sub rsp, 8
         \\    mov qword [rbp-56], rax
         \\    mov rax, qword [rbp-56]
@@ -947,11 +875,269 @@ test "two user defined functions taking ints" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-8]
-        \\    imul rax, rcx
+        \\    imul rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "call user defined int function twice" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x i64)) :ret i64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (square 10))
+        \\  (const b (square 15))
+        \\  b)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    mov rdi, 10
+        \\    sub rsp, 8
+        \\    call label1
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, 15
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    imul rax, qword [rbp-8]
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rax, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "user defined function single float" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x f64)) :ret f64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (square 6.4))
+        \\  5)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word19: dq 6.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    movsd xmm0, [rel quad_word19]
+        \\    sub rsp, 8
+        \\    call label1
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    mov rdi, 5
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd xmm0, qword [rbp-8]
+        \\    movsd xmm1, qword [rbp-8]
+        \\    mulsd xmm0, xmm1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm0
+        \\    movsd xmm0, qword [rbp-16]
+        \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "user defined function two floats" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn mean :args ((x f64) (y f64)) :ret f64
+        \\  :body (/ (+ x y) 2))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (mean 10 20))
+        \\  0)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word24: dq 10.0
+        \\quad_word25: dq 20.0
+        \\quad_word28: dq 2.0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    movsd xmm0, [rel quad_word24]
+        \\    movsd xmm1, [rel quad_word25]
+        \\    sub rsp, 8
+        \\    call label1
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 16
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd qword [rbp-16], xmm1
+        \\    movsd xmm0, qword [rbp-8]
+        \\    movsd xmm1, qword [rbp-16]
+        \\    addsd xmm0, xmm1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-24], xmm0
+        \\    movsd xmm0, qword [rbp-24]
+        \\    movsd xmm1, [rel quad_word28]
+        \\    divsd xmm0, xmm1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-32], xmm0
+        \\    movsd xmm0, qword [rbp-32]
+        \\    add rsp, 32
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "call user defined function float function twice" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn square :args ((x f64)) :ret f64
+        \\  :body (* x x))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const a (square 6.4))
+        \\  (const b (square 10.4))
+        \\  5)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\
+        \\    section .data
+        \\
+        \\quad_word21: dq 10.4
+        \\quad_word19: dq 6.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    mov rbp, rsp
+        \\    movsd xmm0, [rel quad_word19]
+        \\    sub rsp, 8
+        \\    call label1
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd xmm0, [rel quad_word21]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm0
+        \\    mov rdi, 5
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-8], xmm0
+        \\    movsd xmm0, qword [rbp-8]
+        \\    movsd xmm1, qword [rbp-8]
+        \\    mulsd xmm0, xmm1
+        \\    sub rsp, 8
+        \\    movsd qword [rbp-16], xmm0
+        \\    movsd xmm0, qword [rbp-16]
         \\    add rsp, 16
         \\    pop rbp
         \\    ret
