@@ -418,21 +418,21 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\byte19: db "%ld", 10, 0
+        \\byte18: db "%ld", 10, 0
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 12345
-        \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte19
+        \\    mov rsi, 12345
+        \\    mov rdi, byte18
         \\    xor rax, rax
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -468,37 +468,35 @@ test "print three signed integers" {
         \\
         \\    section .data
         \\
-        \\byte23: db "%ld", 10, 0
+        \\byte22: db "%ld", 10, 0
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rsi, 10
+        \\    mov rdi, byte22
+        \\    xor rax, rax
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 10
-        \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte23
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rsi, 20
+        \\    mov rdi, byte22
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 20
-        \\    mov rsi, qword [rbp-24]
-        \\    mov rdi, byte23
+        \\    mov rsi, 30
+        \\    mov rdi, byte22
         \\    xor rax, rax
+        \\    sub rsp, 8
         \\    call _printf
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    sub rsp, 8
-        \\    mov qword [rbp-40], 30
-        \\    mov rsi, qword [rbp-40]
-        \\    mov rdi, byte23
-        \\    xor rax, rax
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -539,29 +537,25 @@ test "align stack before calling print" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], 3
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 5
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov rax, 3
+        \\    mov rcx, 5
         \\    add rax, rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-16]
+        \\    mov qword [rbp-8], rax
+        \\    mov rax, 3
+        \\    mov rcx, 5
         \\    add rax, rcx
         \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    mov rsi, qword [rbp-8]
+        \\    mov qword [rbp-16], rax
+        \\    mov rsi, 3
         \\    mov rdi, byte23
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -588,23 +582,22 @@ test "print a signed float" {
         \\
         \\    section .data
         \\
-        \\byte18: db "%f", 10, 0
+        \\byte17: db "%f", 10, 0
         \\quad_word16: dq 12.345
         \\
         \\    section .text
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word16]
-        \\    movsd qword [rbp-8], xmm0
-        \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte18
+        \\    mov rdi, byte17
         \\    mov rax, 1
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -640,7 +633,7 @@ test "print three signed floats" {
         \\
         \\    section .data
         \\
-        \\byte23: db "%f", 10, 0
+        \\byte22: db "%f", 10, 0
         \\quad_word21: dq 35.7
         \\quad_word19: dq 21.4
         \\quad_word17: dq 10.2
@@ -649,34 +642,29 @@ test "print three signed floats" {
         \\
         \\_main:
         \\    mov rbp, rsp
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word17]
-        \\    movsd qword [rbp-8], xmm0
-        \\    movsd xmm0, qword [rbp-8]
-        \\    mov rdi, byte23
+        \\    mov rdi, byte22
+        \\    mov rax, 1
+        \\    sub rsp, 8
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    movsd xmm0, [rel quad_word19]
+        \\    mov rdi, byte22
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word19]
-        \\    movsd qword [rbp-24], xmm0
-        \\    movsd xmm0, qword [rbp-24]
-        \\    mov rdi, byte23
-        \\    mov rax, 1
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    sub rsp, 8
         \\    movsd xmm0, [rel quad_word21]
-        \\    movsd qword [rbp-40], xmm0
-        \\    movsd xmm0, qword [rbp-40]
-        \\    mov rdi, byte23
+        \\    mov rdi, byte22
         \\    mov rax, 1
-        \\    call _printf
         \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -710,13 +698,13 @@ test "user defined function single int" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 6
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 6
-        \\    mov rdi, qword [rbp-8]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -726,8 +714,7 @@ test "user defined function single int" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-8]
-        \\    imul rax, rcx
+        \\    imul rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rax, qword [rbp-16]
@@ -765,22 +752,16 @@ test "user defined function four ints" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 0
+        \\    mov rsi, 10
+        \\    mov rdx, 5
+        \\    mov rcx, 20
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 0
-        \\    mov rdi, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 10
-        \\    mov rsi, qword [rbp-16]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 5
-        \\    mov rdx, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], 20
-        \\    mov rcx, qword [rbp-32]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -793,19 +774,16 @@ test "user defined function four ints" {
         \\    mov qword [rbp-24], rdx
         \\    mov qword [rbp-32], rcx
         \\    mov rax, qword [rbp-32]
-        \\    mov rcx, qword [rbp-24]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-24]
         \\    sub rsp, 8
         \\    mov qword [rbp-40], rax
         \\    mov rax, qword [rbp-16]
-        \\    mov rcx, qword [rbp-8]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-48], rax
         \\    mov rax, qword [rbp-40]
-        \\    mov rcx, qword [rbp-48]
         \\    cqo
-        \\    idiv rcx
+        \\    idiv qword [rbp-48]
         \\    sub rsp, 8
         \\    mov qword [rbp-56], rax
         \\    mov rax, qword [rbp-56]
@@ -848,26 +826,20 @@ test "two user defined functions taking ints" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 0
+        \\    mov rsi, 10
+        \\    mov rdx, 5
+        \\    mov rcx, 20
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 0
-        \\    mov rdi, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], 10
-        \\    mov rsi, qword [rbp-16]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 5
-        \\    mov rdx, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], 20
-        \\    mov rcx, qword [rbp-32]
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rdi, qword [rbp-40]
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
         \\    call label2
         \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rdi, qword [rbp-48]
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -880,19 +852,16 @@ test "two user defined functions taking ints" {
         \\    mov qword [rbp-24], rdx
         \\    mov qword [rbp-32], rcx
         \\    mov rax, qword [rbp-32]
-        \\    mov rcx, qword [rbp-24]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-24]
         \\    sub rsp, 8
         \\    mov qword [rbp-40], rax
         \\    mov rax, qword [rbp-16]
-        \\    mov rcx, qword [rbp-8]
-        \\    sub rax, rcx
+        \\    sub rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-48], rax
         \\    mov rax, qword [rbp-40]
-        \\    mov rcx, qword [rbp-48]
         \\    cqo
-        \\    idiv rcx
+        \\    idiv qword [rbp-48]
         \\    sub rsp, 8
         \\    mov qword [rbp-56], rax
         \\    mov rax, qword [rbp-56]
@@ -906,8 +875,7 @@ test "two user defined functions taking ints" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-8]
-        \\    imul rax, rcx
+        \\    imul rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rax, qword [rbp-16]
@@ -948,19 +916,17 @@ test "call user defined int function twice" {
         \\
         \\_main:
         \\    mov rbp, rsp
+        \\    mov rdi, 10
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], 10
-        \\    mov rdi, qword [rbp-8]
+        \\    call label1
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, 15
         \\    call label1
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], 15
-        \\    mov rdi, qword [rbp-24]
-        \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    mov rdi, qword [rbp-32]
+        \\    mov rdi, qword [rbp-16]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -970,8 +936,7 @@ test "call user defined int function twice" {
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
-        \\    mov rcx, qword [rbp-8]
-        \\    imul rax, rcx
+        \\    imul rax, qword [rbp-8]
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rax, qword [rbp-16]

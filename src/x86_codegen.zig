@@ -253,8 +253,7 @@ fn nameOf(context: Context, entity: Entity) ?InternedString {
 }
 
 fn codegenPrintI64(context: Context, call: Call) !void {
-    const argument_offset = try entityStackOffset(context, call.argument_entities[0]);
-    try opRegStack(context, .Mov, .Rsi, argument_offset);
+    try moveToRegister(context, .Rsi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%ld\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
@@ -274,8 +273,7 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 }
 
 fn codegenPrintF64(context: Context, call: Call) !void {
-    const argument_offset = try sseEntityStackOffset(context, call.argument_entities[0]);
-    try opSseRegStack(context, .Movsd, .Xmm0, argument_offset);
+    try moveToSseRegister(context, .Xmm0, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%f\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
@@ -546,8 +544,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     switch (parameter_type) {
                         @enumToInt(Builtins.I64) => {
                             assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                            const offset = try entityStackOffset(context, argument_entity);
-                            try opRegStack(context, .Mov, int_registers[argument_index], offset);
+                            try moveToRegister(context, int_registers[argument_index], argument_entity);
                         },
                         @enumToInt(Builtins.F64) => {
                             assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
@@ -559,7 +556,9 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     parameter_types[argument_index] = parameter_type;
                 }
                 const x86_block_result = try context.x86.blocks.addOne();
+                const align_offset = try alignStackTo16Bytes(context);
                 try opLabel(context, .Call, x86_block_result.index);
+                try restoreStack(context, align_offset);
                 const return_type_block = &overload.blocks.items[overload.return_type_block_index];
                 assert(return_type_block.kinds.length == 1);
                 assert(return_type_block.kinds.items[0] == .Return);
@@ -655,8 +654,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     switch (parameter_type) {
                         @enumToInt(Builtins.I64) => {
                             assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.I64));
-                            const offset = try entityStackOffset(context, argument_entity);
-                            try opRegStack(context, .Mov, int_registers[argument_index], offset);
+                            try moveToRegister(context, int_registers[argument_index], argument_entity);
                         },
                         @enumToInt(Builtins.F64) => {
                             assert(argument_type == @enumToInt(Builtins.Int) or argument_type == @enumToInt(Builtins.Float) or argument_type == @enumToInt(Builtins.F64));
@@ -666,7 +664,9 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     }
                 }
                 const block_index = context.entities.overloads.block.items[overload_index];
+                const align_offset = try alignStackTo16Bytes(context);
                 try opLabel(context, .Call, block_index);
+                try restoreStack(context, align_offset);
                 const eight = try internInt(context, 8);
                 try opRegLiteral(context, .Sub, .Rsp, eight);
                 context.stack.top += 8;
