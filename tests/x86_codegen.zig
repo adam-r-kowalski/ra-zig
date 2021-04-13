@@ -259,7 +259,7 @@ test "binary op between signed float and comptime int" {
             \\
             \\    section .data
             \\
-            \\quad_word23: dq 30.0
+            \\quad_word22: dq 30.0
             \\quad_word17: dq 10.3
             \\
             \\    section .text
@@ -267,7 +267,7 @@ test "binary op between signed float and comptime int" {
             \\_main:
             \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word17]
-            \\    movsd xmm1, [rel quad_word23]
+            \\    movsd xmm1, [rel quad_word22]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
@@ -981,7 +981,9 @@ test "user defined function single float" {
         \\_main:
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word19]
+        \\    sub rsp, 8
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    mov rdi, 5
@@ -1043,7 +1045,9 @@ test "user defined function two floats" {
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word24]
         \\    movsd xmm1, [rel quad_word25]
+        \\    sub rsp, 8
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    mov rdi, 0
@@ -1061,16 +1065,13 @@ test "user defined function two floats" {
         \\    addsd xmm0, xmm1
         \\    sub rsp, 8
         \\    movsd qword [rbp-24], xmm0
-        \\    sub rsp, 8
-        \\    movsd xmm0, [rel quad_word28]
-        \\    movsd qword [rbp-32], xmm0
         \\    movsd xmm0, qword [rbp-24]
-        \\    movsd xmm1, qword [rbp-32]
+        \\    movsd xmm1, [rel quad_word28]
         \\    divsd xmm0, xmm1
         \\    sub rsp, 8
-        \\    movsd qword [rbp-40], xmm0
-        \\    movsd xmm0, qword [rbp-40]
-        \\    add rsp, 40
+        \\    movsd qword [rbp-32], xmm0
+        \\    movsd xmm0, qword [rbp-32]
+        \\    add rsp, 32
         \\    pop rbp
         \\    ret
     );
@@ -1113,7 +1114,9 @@ test "call user defined function float function twice" {
         \\_main:
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word19]
+        \\    sub rsp, 8
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    movsd xmm0, [rel quad_word21]

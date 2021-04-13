@@ -312,53 +312,6 @@ const AddOps = BinaryOps{ .int = .Add, .float = .Addsd };
 const SubOps = BinaryOps{ .int = .Sub, .float = .Subsd };
 const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
-fn entityStackOffset(context: Context, entity: Entity) !usize {
-    if (context.stack.entity.get(entity)) |offset| {
-        return offset;
-    }
-    if (context.entities.literals.get(entity)) |value| {
-        context.stack.top += 8;
-        const offset = context.stack.top;
-        try context.stack.entity.putNoClobber(entity, offset);
-        const eight = try internInt(context, 8);
-        try opRegLiteral(context, .Sub, .Rsp, eight);
-        try opStackLiteral(context, .Mov, offset, value);
-        return offset;
-    }
-    unreachable;
-}
-
-fn sseEntityStackOffset(context: Context, entity: Entity) !usize {
-    if (context.stack.entity.get(entity)) |offset| {
-        return offset;
-    }
-    if (context.entities.literals.get(entity)) |value| {
-        context.stack.top += 8;
-        const offset = context.stack.top;
-        try context.stack.entity.putNoClobber(entity, offset);
-        const eight = try internInt(context, 8);
-        try opRegLiteral(context, .Sub, .Rsp, eight);
-        switch (context.entities.types.get(entity).?) {
-            @enumToInt(Builtins.Int) => {
-                const interned = context.entities.interned_strings.data.items[value];
-                const buffer = try std.fmt.allocPrint(context.allocator, "{s}.0", .{interned});
-                const quad_word = try internString(context.entities, buffer);
-                try context.x86.quad_words.insert(quad_word);
-                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, quad_word);
-                try opStackSseReg(context, .Movsd, offset, .Xmm0);
-            },
-            @enumToInt(Builtins.Float) => {
-                try context.x86.quad_words.insert(value);
-                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
-                try opStackSseReg(context, .Movsd, offset, .Xmm0);
-            },
-            else => unreachable,
-        }
-        return offset;
-    }
-    unreachable;
-}
-
 fn moveToRegister(context: Context, register: Register, entity: Entity) !void {
     if (context.entities.literals.get(entity)) |value| {
         assert(context.entities.types.get(entity).? == @enumToInt(Builtins.Int));
@@ -432,7 +385,8 @@ fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs:
         }
         try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
     } else if (context.stack.entity.get(rhs)) |offset| {
-        try opSseRegStack(context, op, .Xmm1, offset);
+        try opSseRegStack(context, .Movsd, .Xmm1, offset);
+        try opSseRegSseReg(context, op, .Xmm0, .Xmm1);
     } else {
         unreachable;
     }

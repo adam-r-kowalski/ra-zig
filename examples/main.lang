@@ -1,8 +1,12 @@
+(fn square :args ((x f64)) :ret f64
+  :body (* x x))
+
 (fn main :args () :ret i64
   :body
-  (const a 10.2)
+  (const a (+ 3.4 9.5))
+  (const b (+ 2.4 8.5))
+  (const c (+ a b))
   (print a)
-  (const b 21.4)
   (print b)
-  (const c 35.7)
-  (print c))
+  (print c)
+  5)
