@@ -29,6 +29,7 @@ test "trivial" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 42
         \\    mov rax, 0x02000001
@@ -68,6 +69,7 @@ test "binary op between two signed integers" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    mov rax, 10
             \\    mov rcx, 15
@@ -116,6 +118,7 @@ test "binary op between three signed integers" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    mov rax, 10
             \\    mov rcx, 15
@@ -164,6 +167,7 @@ test "divide two signed integers" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rax, 20
         \\    cqo
@@ -213,6 +217,7 @@ test "binary op between two signed floats" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word17]
             \\    movsd xmm1, [rel quad_word19]
@@ -265,6 +270,7 @@ test "binary op between signed float and comptime int" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word17]
             \\    movsd xmm1, [rel quad_word22]
@@ -317,6 +323,7 @@ test "binary op between comptime int and signed float" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word22]
             \\    movsd xmm1, [rel quad_word19]
@@ -371,6 +378,7 @@ test "binary op between three signed floats" {
             \\    section .text
             \\
             \\_main:
+            \\    push rbp
             \\    mov rbp, rsp
             \\    movsd xmm0, [rel quad_word17]
             \\    movsd xmm1, [rel quad_word19]
@@ -423,13 +431,12 @@ test "print a signed integer" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 12345
         \\    mov rdi, byte18
         \\    xor rax, rax
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, qword [rbp-8]
@@ -473,86 +480,26 @@ test "print three signed integers" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 10
         \\    mov rdi, byte22
         \\    xor rax, rax
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rsi, 20
         \\    mov rdi, byte22
         \\    xor rax, rax
+        \\    sub rsp, 8
         \\    call _printf
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rsi, 30
         \\    mov rdi, byte22
         \\    xor rax, rax
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
-        \\    mov rax, 0x02000001
-        \\    syscall
-    );
-}
-
-test "align stack before calling print" {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer std.testing.expect(!gpa.deinit());
-    const allocator = &gpa.allocator;
-    const source =
-        \\(fn main :args () :ret i64
-        \\  :body
-        \\  (const a 3)
-        \\  (const b 5)
-        \\  (const c (+ a b))
-        \\  (const d (+ a b))
-        \\  (print a))
-    ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
-    defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
-    defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
-    defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
-    defer x86_string.deinit();
-    std.testing.expectEqualStrings(x86_string.slice(),
-        \\    global _main
-        \\    extern _printf
-        \\
-        \\    section .data
-        \\
-        \\byte23: db "%ld", 10, 0
-        \\
-        \\    section .text
-        \\
-        \\_main:
-        \\    mov rbp, rsp
-        \\    mov rax, 3
-        \\    mov rcx, 5
-        \\    add rax, rcx
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rax, 3
-        \\    mov rcx, 5
-        \\    add rax, rcx
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rsi, 3
-        \\    mov rdi, byte23
-        \\    xor rax, rax
-        \\    sub rsp, 8
-        \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-24], rax
         \\    mov rdi, qword [rbp-24]
@@ -588,13 +535,12 @@ test "print a signed float" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word16]
         \\    mov rdi, byte17
         \\    mov rax, 1
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, qword [rbp-8]
@@ -641,27 +587,26 @@ test "print three signed floats" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word17]
         \\    mov rdi, byte22
         \\    mov rax, 1
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    movsd xmm0, [rel quad_word19]
         \\    mov rdi, byte22
         \\    mov rax, 1
+        \\    sub rsp, 8
         \\    call _printf
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    movsd xmm0, [rel quad_word21]
         \\    mov rdi, byte22
         \\    mov rax, 1
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-24], rax
         \\    mov rdi, qword [rbp-24]
@@ -697,11 +642,10 @@ test "user defined function single int" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 6
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, qword [rbp-8]
@@ -751,14 +695,13 @@ test "user defined function four ints" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 0
         \\    mov rsi, 10
         \\    mov rdx, 5
         \\    mov rcx, 20
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, qword [rbp-8]
@@ -825,18 +768,19 @@ test "two user defined functions taking ints" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 0
         \\    mov rsi, 10
         \\    mov rdx, 5
         \\    mov rcx, 20
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 8
         \\    call label2
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rdi, qword [rbp-16]
@@ -915,15 +859,16 @@ test "call user defined int function twice" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 10
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rdi, 15
+        \\    sub rsp, 8
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rdi, qword [rbp-16]
@@ -979,11 +924,10 @@ test "user defined function single float" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word19]
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    mov rdi, 5
@@ -1042,12 +986,11 @@ test "user defined function two floats" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word24]
         \\    movsd xmm1, [rel quad_word25]
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    mov rdi, 0
@@ -1112,15 +1055,16 @@ test "call user defined function float function twice" {
         \\    section .text
         \\
         \\_main:
+        \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word19]
-        \\    sub rsp, 8
         \\    call label1
-        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
         \\    movsd xmm0, [rel quad_word21]
+        \\    sub rsp, 8
         \\    call label1
+        \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-16], xmm0
         \\    mov rdi, 5
@@ -1139,6 +1083,81 @@ test "call user defined function float function twice" {
         \\    movsd qword [rbp-16], xmm0
         \\    movsd xmm0, qword [rbp-16]
         \\    add rsp, 16
+        \\    pop rbp
+        \\    ret
+    );
+}
+
+test "call user defined function with heterogeneous" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn f :args ((x i64) (y f64)) :ret i64
+        \\  :body
+        \\  (print x)
+        \\  (print y))
+        \\
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (f 5 3.4))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte23: db "%ld", 10, 0
+        \\byte25: db "%f", 10, 0
+        \\quad_word20: dq 3.4
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rdi, 5
+        \\    movsd xmm1, [rel quad_word20]
+        \\    call label1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
+        \\    mov rax, 0x02000001
+        \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 16
+        \\    mov qword [rbp-8], rdi
+        \\    movsd qword [rbp-16], xmm1
+        \\    mov rsi, qword [rbp-8]
+        \\    mov rdi, byte23
+        \\    xor rax, rax
+        \\    call _printf
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], rax
+        \\    movsd xmm0, qword [rbp-16]
+        \\    mov rdi, byte25
+        \\    mov rax, 1
+        \\    sub rsp, 8
+        \\    call _printf
+        \\    add rsp, 8
+        \\    sub rsp, 8
+        \\    mov qword [rbp-32], rax
+        \\    mov rax, qword [rbp-32]
+        \\    add rsp, 32
         \\    pop rbp
         \\    ret
     );

@@ -1,21 +1,6 @@
-(fn meani64 :args ((x i64) (y i64)) :ret i64
-  :body (/ (+ x y) 2))
-
-
-(fn meanf64 :args ((x f64) (y f64)) :ret f64
-  :body (/ (+ x y) 2))
+(fn slope :args ((x1 f64) (x2 f64) (y1 f64) (y2 f64)) :ret f64
+  :body (/ (- y2 y1) (- x2 x1)))
 
 
 (fn main :args () :ret i64
-  :body
-  (const a (meani64 7 10))
-  (const b (meani64 4 5))
-  (print a)
-  (print b)
-  (print (meani64 a b))
-  (const c (meanf64 7 10))
-  (const d (meanf64 4 5))
-  (print c)
-  (print d)
-  (print (meanf64 c d))
-  0)
+  :body (print (slope 0 10 0 20)))

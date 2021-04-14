@@ -224,7 +224,7 @@ fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void
 }
 
 fn alignStackTo16Bytes(context: Context) !usize {
-    const value = (context.stack.top + 8) % 16;
+    const value = context.stack.top % 16;
     if (value == 0) return value;
     const interned = try internInt(context, value);
     try opRegLiteral(context, .Sub, .Rsp, interned);
@@ -667,6 +667,7 @@ fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
         .entities = entities,
         .interned_ints = &interned_ints,
     };
+    try opReg(context, .Push, .Rbp);
     try opRegReg(context, .Mov, .Rbp, .Rsp);
     for (context.ir_block.kinds.slice()) |expression_kind, i| {
         switch (expression_kind) {
