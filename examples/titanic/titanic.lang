@@ -1,0 +1,45 @@
+(fn readtill :args ((buffer (ptr u8)) (target u8) (times u64)) :ret (ptr u8)
+  :body
+  (loop
+    (const current (deref buffer))
+    (inc! buffer)
+    (when (eq current target)
+      (dec! times)
+      (when (zero? times) (return buffer)))))
+
+(const blk (struct :fields ((data (ptr u8)) (len u64))))
+
+(fn readfile :args ((filename (ptr u8))) :ret blk
+  :body
+  (const fd (open filename o-rdonly))
+  (const len (lseek fd 0 seek-end))
+  (lseek fd 0 seek-set)
+  (const prot (bit-or prot-read prot-write))
+  (const flags (bit-or map-private map-anonymous))
+  (const data (mmap null len prot flags -1 0))
+  (read fd data len)
+  (close fd)
+  (blk data len))
+  
+(fn classify :args ((buffer (ptr u8))) :ret f32
+  :body
+  (var correct 0.0)
+  (var total 0.0)
+  (set! buffer (readtill buffer '\n' 1))
+  (loop
+    (inc! total)
+    (set! buffer (readtill buffer ',' 1))
+    (const alive (eq (deref buffer) '1'))
+    (set! buffer (readtill buffer ',' 4))
+    (const male (eq (deref buffer) 'm'))
+    (set! buffer (readtill buffer '\n' 1))
+    (add! correct (or (and male (not alive)) (and (not male) alive)))
+    (when (eq (deref buffer) '\0') (break)))
+  (div correct total))
+
+(fn main :args () :ret i64
+  :body
+  (const contents (readfile "train.csv"))
+  (const accuracy (classify (ptr contents)))
+  (printf "accuracy %f\n" accuracy)
+  (munmap (data contents) (len contents)))
