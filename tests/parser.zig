@@ -139,7 +139,7 @@ test "brackets" {
 test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(fn main :args () :ret i64 :body 0)";
+    const source = "(fn start :args () :ret i64 :body 0)";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -149,7 +149,7 @@ test "entry point" {
     expectEqualStrings(ast_string.slice(),
         \\(parens
         \\  (symbol fn)
-        \\  (symbol main)
+        \\  (symbol start)
         \\  (keyword :args)
         \\  (parens)
         \\  (keyword :ret)

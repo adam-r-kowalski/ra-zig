@@ -244,10 +244,11 @@ fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void
 fn alignStackTo16Bytes(context: Context) !usize {
     const value = context.stack.top % 16;
     if (value == 0) return value;
-    const interned = try internInt(context, value);
+    const desired = 16 - value;
+    const interned = try internInt(context, desired);
     try opRegLiteral(context, .Sub, .Rsp, interned);
-    context.stack.top += value;
-    return value;
+    context.stack.top += desired;
+    return desired;
 }
 
 fn restoreStack(context: Context, offset: usize) !void {
@@ -758,8 +759,8 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     }
 }
 
-fn codegenMain(x86: *X86, entities: *Entities, ir: Ir) !void {
-    const name = entities.interned_strings.mapping.get("main").?;
+fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
+    const name = entities.interned_strings.mapping.get("start").?;
     const index = ir.name_to_index.get(name).?;
     const declaration_kind = ir.kinds.items[index];
     assert(declaration_kind == DeclarationKind.Function);
@@ -821,7 +822,7 @@ pub fn codegen(allocator: *Allocator, entities: *Entities, ir: Ir) !X86 {
         .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
-    try codegenMain(&x86, entities, ir);
+    try codegenStart(&x86, entities, ir);
     return x86;
 }
 

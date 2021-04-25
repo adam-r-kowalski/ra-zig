@@ -1,5 +1,10 @@
-(fn main :args () :ret i64
+(fn start :args () :ret i64
   :body
   (const read-only 0)
-  (const fd (open "train.csv" read-only))
-  (print fd))
+  (const seek-set 0)
+  (const seek-end 2)
+  (const file (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" read-only))
+  (const length (lseek file 0 seek-end))
+  (lseek file 0 seek-set)
+  (print file)
+  (print length))

@@ -2,11 +2,11 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const lang = @import("lang");
 
-test "main" {
+test "start" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body 0)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -18,7 +18,7 @@ test "main" {
     var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
-        \\(fn main
+        \\(fn start
         \\  :parameter-names ()
         \\  :parameter-type-blocks ()
         \\  :return-type-blocks %b0
@@ -283,7 +283,7 @@ test "string literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const filename "train.csv")
         \\  (open filename))
@@ -297,7 +297,7 @@ test "string literal" {
     var ir_string = try lang.irString(&gpa.allocator, entities, ir);
     defer ir_string.deinit();
     std.testing.expectEqualStrings(ir_string.slice(),
-        \\(fn main
+        \\(fn start
         \\  :parameter-names ()
         \\  :parameter-type-blocks ()
         \\  :return-type-blocks %b0

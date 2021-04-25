@@ -13,7 +13,7 @@ test "trivial" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source = "(fn main :args () :ret i64 :body 42)";
+    const source = "(fn start :args () :ret i64 :body 42)";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     var ast = try lang.parse(allocator, &entities, source);
     var ir = try lang.lower(allocator, &entities, ast);
@@ -47,7 +47,7 @@ test "binary op between two signed integers" {
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const x 10)
             \\  (const y 15)
@@ -94,7 +94,7 @@ test "binary op between three signed integers" {
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const a 10)
             \\  (const b 15)
@@ -145,7 +145,7 @@ test "divide two signed integers" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const x 20)
         \\  (const y 4)
@@ -189,7 +189,7 @@ test "binary op between two signed floats" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const x 10.3)
             \\  (const y 30.5)
@@ -211,16 +211,16 @@ test "binary op between two signed floats" {
             \\
             \\    section .data
             \\
-            \\quad_word19: dq 30.5
-            \\quad_word17: dq 10.3
+            \\quad_word21: dq 30.5
+            \\quad_word19: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    push rbp
             \\    mov rbp, rsp
-            \\    movsd xmm0, [rel quad_word17]
-            \\    movsd xmm1, [rel quad_word19]
+            \\    movsd xmm0, [rel quad_word19]
+            \\    movsd xmm1, [rel quad_word21]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
@@ -242,7 +242,7 @@ test "binary op between signed float and comptime int" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const x 10.3)
             \\  (const y 30)
@@ -264,16 +264,16 @@ test "binary op between signed float and comptime int" {
             \\
             \\    section .data
             \\
-            \\quad_word22: dq 30.0
-            \\quad_word17: dq 10.3
+            \\quad_word24: dq 30.0
+            \\quad_word19: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    push rbp
             \\    mov rbp, rsp
-            \\    movsd xmm0, [rel quad_word17]
-            \\    movsd xmm1, [rel quad_word22]
+            \\    movsd xmm0, [rel quad_word19]
+            \\    movsd xmm1, [rel quad_word24]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
@@ -295,7 +295,7 @@ test "binary op between comptime int and signed float" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const x 10)
             \\  (const y 30.5)
@@ -317,16 +317,16 @@ test "binary op between comptime int and signed float" {
             \\
             \\    section .data
             \\
-            \\quad_word19: dq 30.5
-            \\quad_word22: dq 10.0
+            \\quad_word21: dq 30.5
+            \\quad_word24: dq 10.0
             \\
             \\    section .text
             \\
             \\_main:
             \\    push rbp
             \\    mov rbp, rsp
-            \\    movsd xmm0, [rel quad_word22]
-            \\    movsd xmm1, [rel quad_word19]
+            \\    movsd xmm0, [rel quad_word24]
+            \\    movsd xmm1, [rel quad_word21]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
@@ -348,7 +348,7 @@ test "binary op between three signed floats" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn main :args () :ret i64
+            \\(fn start :args () :ret i64
             \\  :body
             \\  (const a 10.3)
             \\  (const b 30.5)
@@ -371,22 +371,22 @@ test "binary op between three signed floats" {
             \\
             \\    section .data
             \\
-            \\quad_word19: dq 30.5
-            \\quad_word22: dq 40.2
-            \\quad_word17: dq 10.3
+            \\quad_word21: dq 30.5
+            \\quad_word24: dq 40.2
+            \\quad_word19: dq 10.3
             \\
             \\    section .text
             \\
             \\_main:
             \\    push rbp
             \\    mov rbp, rsp
-            \\    movsd xmm0, [rel quad_word17]
-            \\    movsd xmm1, [rel quad_word19]
+            \\    movsd xmm0, [rel quad_word19]
+            \\    movsd xmm1, [rel quad_word21]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
             \\    movsd xmm0, qword [rbp-8]
-            \\    movsd xmm1, [rel quad_word22]
+            \\    movsd xmm1, [rel quad_word24]
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-16], xmm0
@@ -405,7 +405,7 @@ test "print a signed integer" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a 12345)
         \\  (print a))
@@ -426,7 +426,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\byte18: db "%ld", 10, 0
+        \\byte20: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -434,7 +434,7 @@ test "print a signed integer" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 12345
-        \\    mov rdi, byte18
+        \\    mov rdi, byte20
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -450,7 +450,7 @@ test "print three signed integers" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a 10)
         \\  (print a)
@@ -475,7 +475,7 @@ test "print three signed integers" {
         \\
         \\    section .data
         \\
-        \\byte22: db "%ld", 10, 0
+        \\byte24: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -483,13 +483,13 @@ test "print three signed integers" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 10
-        \\    mov rdi, byte22
+        \\    mov rdi, byte24
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rsi, 20
-        \\    mov rdi, byte22
+        \\    mov rdi, byte24
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
@@ -497,7 +497,7 @@ test "print three signed integers" {
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rsi, 30
-        \\    mov rdi, byte22
+        \\    mov rdi, byte24
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -512,7 +512,7 @@ test "print a signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source = "(fn main :args () :ret i64 :body (print 12.345))";
+    const source = "(fn start :args () :ret i64 :body (print 12.345))";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try lang.parse(&gpa.allocator, &entities, source);
@@ -529,16 +529,16 @@ test "print a signed float" {
         \\
         \\    section .data
         \\
-        \\byte17: db "%f", 10, 0
-        \\quad_word16: dq 12.345
+        \\byte19: db "%f", 10, 0
+        \\quad_word18: dq 12.345
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    movsd xmm0, [rel quad_word16]
-        \\    mov rdi, byte17
+        \\    movsd xmm0, [rel quad_word18]
+        \\    mov rdi, byte19
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
@@ -554,7 +554,7 @@ test "print three signed floats" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a 10.2)
         \\  (print a)
@@ -579,32 +579,32 @@ test "print three signed floats" {
         \\
         \\    section .data
         \\
-        \\byte22: db "%f", 10, 0
-        \\quad_word21: dq 35.7
-        \\quad_word19: dq 21.4
-        \\quad_word17: dq 10.2
+        \\byte24: db "%f", 10, 0
+        \\quad_word21: dq 21.4
+        \\quad_word23: dq 35.7
+        \\quad_word19: dq 10.2
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    movsd xmm0, [rel quad_word17]
-        \\    mov rdi, byte22
+        \\    movsd xmm0, [rel quad_word19]
+        \\    mov rdi, byte24
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
-        \\    movsd xmm0, [rel quad_word19]
-        \\    mov rdi, byte22
+        \\    movsd xmm0, [rel quad_word21]
+        \\    mov rdi, byte24
         \\    mov rax, 1
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    movsd xmm0, [rel quad_word21]
-        \\    mov rdi, byte22
+        \\    movsd xmm0, [rel quad_word23]
+        \\    mov rdi, byte24
         \\    mov rax, 1
         \\    call _printf
         \\    sub rsp, 8
@@ -620,7 +620,7 @@ test "print string literal" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body (print "hello world"))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -639,16 +639,16 @@ test "print string literal" {
         \\
         \\    section .data
         \\
-        \\byte18: db "%s", 10, 0
-        \\byte17: db "hello world", 0
+        \\byte20: db "%s", 10, 0
+        \\byte19: db "hello world", 0
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rsi, byte17
-        \\    mov rdi, byte18
+        \\    mov rsi, byte19
+        \\    mov rdi, byte20
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -667,7 +667,7 @@ test "user defined function single int" {
         \\(fn square :args ((x i64)) :ret i64
         \\  :body (mul x x))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body (square 6))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -720,7 +720,7 @@ test "user defined function four ints" {
         \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
         \\  :body (div (sub y2 y1) (sub x2 x1)))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body (slope 0 10 5 20))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -791,7 +791,7 @@ test "two user defined functions taking ints" {
         \\(fn square :args ((x i64)) :ret i64
         \\  :body (mul x x))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a (slope 0 10 5 20))
         \\  (square a))
@@ -881,7 +881,7 @@ test "call user defined int function twice" {
         \\(fn square :args ((x i64)) :ret i64
         \\  :body (mul x x))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a (square 10))
         \\  (const b (square 15))
@@ -943,7 +943,7 @@ test "user defined function single float" {
         \\(fn square :args ((x f64)) :ret f64
         \\  :body (mul x x))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a (square 6.4))
         \\  5)
@@ -963,14 +963,14 @@ test "user defined function single float" {
         \\
         \\    section .data
         \\
-        \\quad_word19: dq 6.4
+        \\quad_word21: dq 6.4
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    movsd xmm0, [rel quad_word19]
+        \\    movsd xmm0, [rel quad_word21]
         \\    call label1
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
@@ -1003,7 +1003,7 @@ test "user defined function two floats" {
         \\(fn mean :args ((x f64) (y f64)) :ret f64
         \\  :body (div (add x y) 2))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a (mean 10 20))
         \\  0)
@@ -1023,17 +1023,17 @@ test "user defined function two floats" {
         \\
         \\    section .data
         \\
-        \\quad_word24: dq 10.0
-        \\quad_word25: dq 20.0
-        \\quad_word28: dq 2.0
+        \\quad_word27: dq 20.0
+        \\quad_word26: dq 10.0
+        \\quad_word30: dq 2.0
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    movsd xmm0, [rel quad_word24]
-        \\    movsd xmm1, [rel quad_word25]
+        \\    movsd xmm0, [rel quad_word26]
+        \\    movsd xmm1, [rel quad_word27]
         \\    call label1
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
@@ -1053,7 +1053,7 @@ test "user defined function two floats" {
         \\    sub rsp, 8
         \\    movsd qword [rbp-24], xmm0
         \\    movsd xmm0, qword [rbp-24]
-        \\    movsd xmm1, [rel quad_word28]
+        \\    movsd xmm1, [rel quad_word30]
         \\    divsd xmm0, xmm1
         \\    sub rsp, 8
         \\    movsd qword [rbp-32], xmm0
@@ -1072,7 +1072,7 @@ test "call user defined function float function twice" {
         \\(fn square :args ((x f64)) :ret f64
         \\  :body (mul x x))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const a (square 6.4))
         \\  (const b (square 10.4))
@@ -1093,19 +1093,19 @@ test "call user defined function float function twice" {
         \\
         \\    section .data
         \\
-        \\quad_word21: dq 10.4
-        \\quad_word19: dq 6.4
+        \\quad_word21: dq 6.4
+        \\quad_word23: dq 10.4
         \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    movsd xmm0, [rel quad_word19]
+        \\    movsd xmm0, [rel quad_word21]
         \\    call label1
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
-        \\    movsd xmm0, [rel quad_word21]
+        \\    movsd xmm0, [rel quad_word23]
         \\    sub rsp, 8
         \\    call label1
         \\    add rsp, 8
@@ -1142,7 +1142,7 @@ test "call user defined function with heterogeneous" {
         \\  (print x)
         \\  (print y))
         \\
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (f 5 3.4))
     ;
@@ -1162,9 +1162,9 @@ test "call user defined function with heterogeneous" {
         \\
         \\    section .data
         \\
-        \\byte23: db "%ld", 10, 0
-        \\byte25: db "%f", 10, 0
-        \\quad_word20: dq 3.4
+        \\byte27: db "%f", 10, 0
+        \\byte25: db "%ld", 10, 0
+        \\quad_word22: dq 3.4
         \\
         \\    section .text
         \\
@@ -1172,7 +1172,7 @@ test "call user defined function with heterogeneous" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rdi, 5
-        \\    movsd xmm1, [rel quad_word20]
+        \\    movsd xmm1, [rel quad_word22]
         \\    call label1
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
@@ -1187,13 +1187,13 @@ test "call user defined function with heterogeneous" {
         \\    mov qword [rbp-8], rdi
         \\    movsd qword [rbp-16], xmm1
         \\    mov rsi, qword [rbp-8]
-        \\    mov rdi, byte23
+        \\    mov rdi, byte25
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-24], rax
         \\    movsd xmm0, qword [rbp-16]
-        \\    mov rdi, byte25
+        \\    mov rdi, byte27
         \\    mov rax, 1
         \\    sub rsp, 8
         \\    call _printf
@@ -1212,7 +1212,7 @@ test "open syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const o-rdonly 0)
         \\  (const fd (open "file.txt" o-rdonly))
@@ -1251,9 +1251,9 @@ test "open syscall" {
         \\    mov esi, dword [rbp-4]
         \\    mov rdi, byte25
         \\    xor rax, rax
-        \\    sub rsp, 4
+        \\    sub rsp, 12
         \\    call _printf
-        \\    add rsp, 4
+        \\    add rsp, 12
         \\    sub rsp, 8
         \\    mov qword [rbp-12], rax
         \\    mov rdi, qword [rbp-12]
@@ -1269,7 +1269,7 @@ test "lseek syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn main :args () :ret i64
+        \\(fn start :args () :ret i64
         \\  :body
         \\  (const fd 2)
         \\  (const seek-end 2)
