@@ -1,6 +1,10 @@
-(fn slope :args ((x1 f64) (x2 f64) (y1 f64) (y2 f64)) :ret f64
-  :body (/ (- y2 y1) (- x2 x1)))
-
-
-(fn main :args () :ret i64
-  :body (print (slope 0 10 0 20)))
+(fn start :args () :ret i64
+  :body
+  (const read-only 0)
+  (const seek-set 0)
+  (const seek-end 2)
+  (const file (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" read-only))
+  (const length (lseek file 0 seek-end))
+  (lseek file 0 seek-set)
+  (print file)
+  (print length))

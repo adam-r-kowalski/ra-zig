@@ -54,32 +54,32 @@ pub fn main() anyerror!void {
         .argv = &[_][]const u8{ "ld", "temp/code.o", "-lSystem", "-o", "temp/code" },
     });
     const t11 = timer.read();
-    std.debug.print(
-        \\initialize allocator  {}
-        \\collecting args       {}
-        \\reading source file   {}
-        \\init entities {}
-        \\parsing               {}
-        \\lowering              {}
-        \\codegen               {}
-        \\x86 string            {}
-        \\writing asm file      {}
-        \\nasm                  {}
-        \\ld                    {}
-        \\total                 {}
-        \\
-    , .{
-        t1 - t0,
-        t2 - t1,
-        t3 - t2,
-        t4 - t3,
-        t5 - t4,
-        t6 - t5,
-        t7 - t6,
-        t8 - t7,
-        t9 - t8,
-        t10 - t9,
-        t11 - t10,
-        t11 - t0,
-    });
+    // std.debug.print(
+    //     \\initialize allocator  {}
+    //     \\collecting args       {}
+    //     \\reading source file   {}
+    //     \\init entities {}
+    //     \\parsing               {}
+    //     \\lowering              {}
+    //     \\codegen               {}
+    //     \\x86 string            {}
+    //     \\writing asm file      {}
+    //     \\nasm                  {}
+    //     \\ld                    {}
+    //     \\total                 {}
+    //     \\
+    // , .{
+    //     t1 - t0,
+    //     t2 - t1,
+    //     t3 - t2,
+    //     t4 - t3,
+    //     t5 - t4,
+    //     t6 - t5,
+    //     t7 - t6,
+    //     t8 - t7,
+    //     t9 - t8,
+    //     t10 - t9,
+    //     t11 - t10,
+    //     t11 - t0,
+    // });
 }

@@ -62,6 +62,17 @@ fn list(kind: Kind, delimiter: u8, ast: *Ast, entities: *Entities, source: *Sour
     return kind_index;
 }
 
+fn string(ast: *Ast, entities: *Entities, source: *Source) !usize {
+    var length: usize = 1;
+    while (length < source.input.len) : (length += 1) {
+        if (source.input[length] == '"') {
+            length += 1;
+            break;
+        }
+    }
+    return try insert(.String, ast, entities, source, length);
+}
+
 fn isWhitespace(char: u8) bool {
     return switch (char) {
         ' ', '\n' => true,
@@ -82,6 +93,7 @@ fn expression(ast: *Ast, entities: *Entities, source: *Source) error{OutOfMemory
         '.' => try number(ast, entities, source, 1),
         '(' => try list(.Parens, ')', ast, entities, source),
         '[' => try list(.Brackets, ']', ast, entities, source),
+        '"' => try string(ast, entities, source),
         ':' => try identifier(.Keyword, ast, entities, source),
         else => try identifier(.Symbol, ast, entities, source),
     };
@@ -106,7 +118,7 @@ pub fn parse(allocator: *Allocator, entities: *Entities, input: []const u8) !Ast
     return ast;
 }
 
-fn writeString(output: *List(u8), entities: Entities, kind: []const u8, index: usize) !void {
+fn writeLiteral(output: *List(u8), entities: Entities, kind: []const u8, index: usize) !void {
     _ = try output.insert('(');
     try output.insertSlice(kind);
     _ = try output.insert(' ');
@@ -129,10 +141,11 @@ fn expressionString(output: *List(u8), ast: Ast, entities: Entities, index: usiz
     while (i < depth) : (i += 1) _ = try output.insert(' ');
     const data_index = ast.indices.items[index];
     switch (ast.kinds.items[index]) {
-        .Int => try writeString(output, entities, "int", data_index),
-        .Float => try writeString(output, entities, "float", data_index),
-        .Symbol => try writeString(output, entities, "symbol", data_index),
-        .Keyword => try writeString(output, entities, "keyword", data_index),
+        .Int => try writeLiteral(output, entities, "int", data_index),
+        .Float => try writeLiteral(output, entities, "float", data_index),
+        .Symbol => try writeLiteral(output, entities, "symbol", data_index),
+        .Keyword => try writeLiteral(output, entities, "keyword", data_index),
+        .String => try writeLiteral(output, entities, "string", data_index),
         .Parens => try writeList(output, ast, entities, "parens", data_index, depth),
         .Brackets => try writeList(output, ast, entities, "brackets", data_index, depth),
     }

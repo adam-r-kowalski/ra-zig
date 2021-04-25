@@ -70,6 +70,20 @@ fn lowerNumber(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     return entity;
 }
 
+fn lowerString(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
+    const string = ast.indices.items[ast_entity];
+    const active_scopes = overload.blocks.items[active_block.*].active_scopes;
+    const entity = entities.next_entity;
+    entities.next_entity += 1;
+    try entities.literals.putNoClobber(entity, string);
+    try entities.types.putNoClobber(entity, @enumToInt(Builtins.Array));
+    const array_index = try entities.arrays.types.insert(@enumToInt(Builtins.U8));
+    _ = try entities.arrays.lengths.insert(entities.interned_strings.data.items[string].len);
+    try entities.array_index.putNoClobber(entity, array_index);
+    _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
+    return entity;
+}
+
 fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const allocator = &ir.arena.allocator;
     const condition_block = &overload.blocks.items[active_block.*];
@@ -160,6 +174,7 @@ fn lowerExpression(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, 
         .Symbol => try lowerSymbol(ir, entities, overload, ast, active_block, ast_entity),
         .Int => try lowerNumber(ir, entities, overload, ast, active_block, ast_entity, @enumToInt(Builtins.Int)),
         .Float => try lowerNumber(ir, entities, overload, ast, active_block, ast_entity, @enumToInt(Builtins.Float)),
+        .String => try lowerString(ir, entities, overload, ast, active_block, ast_entity),
         .Parens => try lowerParens(ir, entities, overload, ast, active_block, ast_entity),
         else => unreachable,
     };

@@ -18,8 +18,11 @@ pub const Builtins = enum(Entity) {
     Const,
     Int,
     I64,
+    I32,
+    U8,
     Float,
     F64,
+    Array,
 };
 
 pub fn internString(entities: *Entities, string: []const u8) !InternedString {
@@ -49,6 +52,8 @@ pub const Strings = enum(InternedString) {
     Multiply,
     Divide,
     Print,
+    Open,
+    Lseek,
 };
 
 pub const Status = enum { Unanalyzed, Analyzed };
@@ -60,14 +65,21 @@ pub const Overloads = struct {
     block: List(usize),
 };
 
+pub const Arrays = struct {
+    types: List(Entity),
+    lengths: List(usize),
+};
+
 pub const Entities = struct {
     names: Map(Entity, InternedString),
     literals: Map(Entity, InternedString),
     types: Map(Entity, Entity),
     overload_index: Map(Entity, usize),
+    array_index: Map(Entity, usize),
     next_entity: Entity,
     interned_strings: InternedStrings,
     overloads: Overloads,
+    arrays: Arrays,
     arena: *Arena,
 
     pub fn init(allocator: *Allocator) !Entities {
@@ -79,6 +91,7 @@ pub const Entities = struct {
             .literals = Map(Entity, InternedString).init(&arena.allocator),
             .types = Map(Entity, Entity).init(&arena.allocator),
             .overload_index = Map(Entity, usize).init(&arena.allocator),
+            .array_index = Map(Entity, usize).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
                 .data = List([]const u8).init(&arena.allocator),
@@ -89,6 +102,10 @@ pub const Entities = struct {
                 .parameter_types = List([]const Entity).init(&arena.allocator),
                 .return_type = List(Entity).init(&arena.allocator),
                 .block = List(usize).init(&arena.allocator),
+            },
+            .arrays = Arrays{
+                .types = List(Entity).init(&arena.allocator),
+                .lengths = List(usize).init(&arena.allocator),
             },
             .arena = arena,
         };
@@ -102,11 +119,13 @@ pub const Entities = struct {
         _ = try internString(&entities, "i64");
         _ = try internString(&entities, "float");
         _ = try internString(&entities, "f64");
-        _ = try internString(&entities, "+");
-        _ = try internString(&entities, "-");
-        _ = try internString(&entities, "*");
-        _ = try internString(&entities, "/");
+        _ = try internString(&entities, "add");
+        _ = try internString(&entities, "sub");
+        _ = try internString(&entities, "mul");
+        _ = try internString(&entities, "div");
         _ = try internString(&entities, "print");
+        _ = try internString(&entities, "open");
+        _ = try internString(&entities, "lseek");
         return entities;
     }
 

@@ -74,10 +74,29 @@ test "keyword" {
     );
 }
 
+test "string" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const source =
+        \\"foo" "bar" "baz"
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, entities);
+    defer ast_string.deinit();
+    expectEqualStrings(ast_string.slice(),
+        \\(string "foo")
+        \\(string "bar")
+        \\(string "baz")
+    );
+}
+
 test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(+ 3 7 (* 9 5))";
+    const source = "(add 3 7 (mul 9 5))";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -86,11 +105,11 @@ test "parens" {
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(parens
-        \\  (symbol +)
+        \\  (symbol add)
         \\  (int 3)
         \\  (int 7)
         \\  (parens
-        \\    (symbol *)
+        \\    (symbol mul)
         \\    (int 9)
         \\    (int 5)))
     );
@@ -120,7 +139,7 @@ test "brackets" {
 test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(fn main :args () :ret i64 :body 0)";
+    const source = "(fn start :args () :ret i64 :body 0)";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -130,7 +149,7 @@ test "entry point" {
     expectEqualStrings(ast_string.slice(),
         \\(parens
         \\  (symbol fn)
-        \\  (symbol main)
+        \\  (symbol start)
         \\  (keyword :args)
         \\  (parens)
         \\  (keyword :ret)
