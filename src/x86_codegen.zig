@@ -533,6 +533,29 @@ fn codegenDivide(context: Context, call: Call) !void {
     }
 }
 
+fn codegenBitOr(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs = call.argument_entities[0];
+    const rhs = call.argument_entities[1];
+    try moveToRegister(context, .Rax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opRegReg(context, .Or, .Rax, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, .Or, .Rax, offset);
+    } else {
+        unreachable;
+    }
+    context.stack.top += 8;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
 fn codegenOpen(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 2);
     const open_syscall = try internString(context.entities, "0x2000005");
@@ -589,9 +612,10 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const name = nameOf(context, call.function_entity).?;
     switch (name) {
         @enumToInt(Strings.Add) => try codegenBinaryOp(context, call, AddOps),
-        @enumToInt(Strings.Subtract) => try codegenBinaryOp(context, call, SubOps),
-        @enumToInt(Strings.Multiply) => try codegenBinaryOp(context, call, MulOps),
-        @enumToInt(Strings.Divide) => try codegenDivide(context, call),
+        @enumToInt(Strings.Sub) => try codegenBinaryOp(context, call, SubOps),
+        @enumToInt(Strings.Mul) => try codegenBinaryOp(context, call, MulOps),
+        @enumToInt(Strings.Div) => try codegenDivide(context, call),
+        @enumToInt(Strings.BitOr) => try codegenBitOr(context, call),
         @enumToInt(Strings.Print) => try codegenPrint(context, call),
         @enumToInt(Strings.Open) => try codegenOpen(context, call),
         @enumToInt(Strings.Lseek) => try codegenLseek(context, call),
@@ -849,6 +873,7 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Idiv => try output.insertSlice("idiv"),
         .Divsd => try output.insertSlice("divsd"),
         .Xor => try output.insertSlice("xor"),
+        .Or => try output.insertSlice("or"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
         .Cqo => try output.insertSlice("cqo"),

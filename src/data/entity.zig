@@ -48,9 +48,10 @@ pub const Strings = enum(InternedString) {
     Float,
     F64,
     Add,
-    Subtract,
-    Multiply,
-    Divide,
+    Sub,
+    Mul,
+    Div,
+    BitOr,
     Print,
     Open,
     Lseek,
@@ -123,6 +124,7 @@ pub const Entities = struct {
         _ = try internString(&entities, "sub");
         _ = try internString(&entities, "mul");
         _ = try internString(&entities, "div");
+        _ = try internString(&entities, "bit-or");
         _ = try internString(&entities, "print");
         _ = try internString(&entities, "open");
         _ = try internString(&entities, "lseek");
