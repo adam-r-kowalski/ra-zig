@@ -39,7 +39,7 @@ fn lowerSymbol(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const name = ast.indices.items[ast_entity];
     switch (name) {
         @enumToInt(Strings.If) => return @enumToInt(Builtins.If),
-        @enumToInt(Strings.Const) => return @enumToInt(Builtins.Const),
+        @enumToInt(Strings.Let) => return @enumToInt(Builtins.Let),
         @enumToInt(Strings.I64) => return @enumToInt(Builtins.I64),
         @enumToInt(Strings.F64) => return @enumToInt(Builtins.F64),
         else => {
@@ -128,7 +128,7 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
     return result_entity;
 }
 
-fn lowerConst(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
+fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
     const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
     assert(children.len == 2);
@@ -164,7 +164,7 @@ fn lowerParens(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const function = try lowerExpression(ir, entities, overload, ast, active_block, children[0]);
     return switch (function) {
         @enumToInt(Builtins.If) => lowerIf(ir, entities, overload, ast, active_block, children[1..]),
-        @enumToInt(Builtins.Const) => lowerConst(ir, entities, overload, ast, active_block, children[1..]),
+        @enumToInt(Builtins.Let) => lowerLet(ir, entities, overload, ast, active_block, children[1..]),
         else => lowerCall(ir, entities, overload, ast, active_block, function, children[1..]),
     };
 }
@@ -451,7 +451,7 @@ fn writeReturn(writer: Writer, block: Block, block_entity: usize) !void {
 fn writeCall(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const call = block.calls.items[block.indices.items[block_entity]];
-    try output.insertSlice("\n    (const ");
+    try output.insertSlice("\n    (let ");
     try writeEntity(writer, call.result_entity);
     try output.insertSlice(" (");
     try writeEntity(writer, call.function_entity);
@@ -473,7 +473,7 @@ fn writeBranch(writer: Writer, block: Block, block_entity: usize) !void {
 fn writePhi(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const phi = block.phis.items[block.indices.items[block_entity]];
-    try output.insertSlice("\n    (const ");
+    try output.insertSlice("\n    (let ");
     try writeEntity(writer, phi.result_entity);
     try output.insertSlice(" (phi ");
     try output.insertFormatted("(%b{} ", .{phi.then_block_index});

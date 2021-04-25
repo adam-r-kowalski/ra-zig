@@ -15,7 +15,7 @@ pub const Entity = usize;
 
 pub const Builtins = enum(Entity) {
     If,
-    Const,
+    Let,
     Int,
     I64,
     I32,
@@ -42,7 +42,7 @@ pub const Strings = enum(InternedString) {
     Ret,
     Body,
     If,
-    Const,
+    Let,
     Int,
     I64,
     Float,
@@ -114,7 +114,7 @@ pub const Entities = struct {
         _ = try internString(&entities, ":ret");
         _ = try internString(&entities, ":body");
         _ = try internString(&entities, "if");
-        _ = try internString(&entities, "const");
+        _ = try internString(&entities, "let");
         _ = try internString(&entities, "int");
         _ = try internString(&entities, "i64");
         _ = try internString(&entities, "float");

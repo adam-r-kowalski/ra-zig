@@ -49,8 +49,8 @@ test "binary op between two signed integers" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const x 10)
-            \\  (const y 15)
+            \\  (let x 10)
+            \\  (let y 15)
             \\  ({s} x y))
         , .{op});
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -96,10 +96,10 @@ test "binary op between three signed integers" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const a 10)
-            \\  (const b 15)
-            \\  (const c ({s} a b))
-            \\  (const d 20)
+            \\  (let a 10)
+            \\  (let b 15)
+            \\  (let c ({s} a b))
+            \\  (let d 20)
             \\  ({s} c d))
         , .{ op, op });
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -147,8 +147,8 @@ test "divide two signed integers" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const x 20)
-        \\  (const y 4)
+        \\  (let x 20)
+        \\  (let y 4)
         \\  (div x y))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -191,9 +191,9 @@ test "binary op between two signed floats" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const x 10.3)
-            \\  (const y 30.5)
-            \\  (const z ({s} x y))
+            \\  (let x 10.3)
+            \\  (let y 30.5)
+            \\  (let z ({s} x y))
             \\  0)
         , .{op});
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -244,9 +244,9 @@ test "binary op between signed float and comptime int" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const x 10.3)
-            \\  (const y 30)
-            \\  (const z ({s} x y))
+            \\  (let x 10.3)
+            \\  (let y 30)
+            \\  (let z ({s} x y))
             \\  0)
         , .{op});
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -297,9 +297,9 @@ test "binary op between comptime int and signed float" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const x 10)
-            \\  (const y 30.5)
-            \\  (const z ({s} x y))
+            \\  (let x 10)
+            \\  (let y 30.5)
+            \\  (let z ({s} x y))
             \\  0)
         , .{op});
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -350,10 +350,10 @@ test "binary op between three signed floats" {
         const source = try std.fmt.allocPrint(allocator,
             \\(fn start :args () :ret i64
             \\  :body
-            \\  (const a 10.3)
-            \\  (const b 30.5)
-            \\  (const c ({s} a b))
-            \\  (const d ({s} c 40.2))
+            \\  (let a 10.3)
+            \\  (let b 30.5)
+            \\  (let c ({s} a b))
+            \\  (let d ({s} c 40.2))
             \\  0)
         , .{ op, op });
         var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -407,7 +407,7 @@ test "print a signed integer" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a 12345)
+        \\  (let a 12345)
         \\  (print a))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -452,11 +452,11 @@ test "print three signed integers" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a 10)
+        \\  (let a 10)
         \\  (print a)
-        \\  (const b 20)
+        \\  (let b 20)
         \\  (print b)
-        \\  (const c 30)
+        \\  (let c 30)
         \\  (print c))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -556,11 +556,11 @@ test "print three signed floats" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a 10.2)
+        \\  (let a 10.2)
         \\  (print a)
-        \\  (const b 21.4)
+        \\  (let b 21.4)
         \\  (print b)
-        \\  (const c 35.7)
+        \\  (let c 35.7)
         \\  (print c))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -793,7 +793,7 @@ test "two user defined functions taking ints" {
         \\
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a (slope 0 10 5 20))
+        \\  (let a (slope 0 10 5 20))
         \\  (square a))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -883,8 +883,8 @@ test "call user defined int function twice" {
         \\
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a (square 10))
-        \\  (const b (square 15))
+        \\  (let a (square 10))
+        \\  (let b (square 15))
         \\  b)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -945,7 +945,7 @@ test "user defined function single float" {
         \\
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a (square 6.4))
+        \\  (let a (square 6.4))
         \\  5)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -1005,7 +1005,7 @@ test "user defined function two floats" {
         \\
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a (mean 10 20))
+        \\  (let a (mean 10 20))
         \\  0)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -1074,8 +1074,8 @@ test "call user defined function float function twice" {
         \\
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const a (square 6.4))
-        \\  (const b (square 10.4))
+        \\  (let a (square 6.4))
+        \\  (let b (square 10.4))
         \\  5)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -1214,8 +1214,8 @@ test "open syscall" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const o-rdonly 0)
-        \\  (const fd (open "file.txt" o-rdonly))
+        \\  (let o-rdonly 0)
+        \\  (let fd (open "file.txt" o-rdonly))
         \\  (print fd))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -1271,8 +1271,8 @@ test "lseek syscall" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const fd 2)
-        \\  (const seek-end 2)
+        \\  (let fd 2)
+        \\  (let seek-end 2)
         \\  (lseek fd 0 seek-end))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);

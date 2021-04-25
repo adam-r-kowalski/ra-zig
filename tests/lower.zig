@@ -90,10 +90,10 @@ test "compound expressions" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const %t1 (pow x %t0))
-        \\    (const %t3 (pow y %t2))
-        \\    (const %t4 (add %t1 %t3))
-        \\    (const %t5 (sqrt %t4))
+        \\    (let %t1 (pow x %t0))
+        \\    (let %t3 (pow y %t2))
+        \\    (let %t4 (add %t1 %t3))
+        \\    (let %t5 (sqrt %t4))
         \\    (return %t5)))
     );
 }
@@ -146,7 +146,7 @@ test "conditionals" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const %t0 (gt x y))
+        \\    (let %t0 (gt x y))
         \\    (branch %t0 %b4 %b5))
         \\  (block %b4 :scopes (%external %function %s3 %s4)
         \\    :expressions
@@ -156,7 +156,7 @@ test "conditionals" {
         \\    (jump %b6))
         \\  (block %b6 :scopes (%external %function %s3 %s6)
         \\    :expressions
-        \\    (const %t1 (phi (%b4 x) (%b5 y)))
+        \\    (let %t1 (phi (%b4 x) (%b5 y)))
         \\    (return %t1)))
     );
 }
@@ -167,8 +167,8 @@ test "int literal" {
     const source =
         \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
         \\  :body
-        \\  (const x2 (pow x 2))
-        \\  (const y2 (pow y 2))
+        \\  (let x2 (pow x 2))
+        \\  (let y2 (pow y 2))
         \\  (add x2 y2))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -213,9 +213,9 @@ test "int literal" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const x2 (pow x %t0))
-        \\    (const y2 (pow y %t1))
-        \\    (const %t2 (add x2 y2))
+        \\    (let x2 (pow x %t0))
+        \\    (let y2 (pow y %t1))
+        \\    (let %t2 (add x2 y2))
         \\    (return %t2)))
     );
 }
@@ -226,8 +226,8 @@ test "float literal" {
     const source =
         \\(fn sum-of-squares :args ((x f64) (y f64)) :ret f64
         \\  :body
-        \\  (const x2 (pow x 2.0))
-        \\  (const y2 (pow y 2.0))
+        \\  (let x2 (pow x 2.0))
+        \\  (let y2 (pow y 2.0))
         \\  (add x2 y2))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -272,9 +272,9 @@ test "float literal" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const x2 (pow x %t0))
-        \\    (const y2 (pow y %t1))
-        \\    (const %t2 (add x2 y2))
+        \\    (let x2 (pow x %t0))
+        \\    (let y2 (pow y %t1))
+        \\    (let %t2 (add x2 y2))
         \\    (return %t2)))
     );
 }
@@ -285,7 +285,7 @@ test "string literal" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (const filename "train.csv")
+        \\  (let filename "train.csv")
         \\  (open filename))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -316,7 +316,7 @@ test "string literal" {
         \\    (return i64))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
-        \\    (const %t0 (open filename))
+        \\    (let %t0 (open filename))
         \\    (return %t0)))
     );
 }
@@ -370,9 +370,9 @@ test "overloading" {
         \\    (return f64))
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
-        \\    (const %t0 (radius c))
-        \\    (const %t2 (pow %t0 %t1))
-        \\    (const %t3 (mul pi %t2))
+        \\    (let %t0 (radius c))
+        \\    (let %t2 (pow %t0 %t1))
+        \\    (let %t3 (mul pi %t2))
         \\    (return %t3)))
         \\
         \\(fn area
@@ -403,9 +403,9 @@ test "overloading" {
         \\    (return f64))
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
-        \\    (const %t0 (width r))
-        \\    (const %t1 (height r))
-        \\    (const %t2 (mul %t0 %t1))
+        \\    (let %t0 (width r))
+        \\    (let %t1 (height r))
+        \\    (let %t2 (mul %t0 %t1))
         \\    (return %t2)))
     );
 }

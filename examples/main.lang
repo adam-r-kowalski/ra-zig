@@ -1,10 +1,10 @@
 (fn start :args () :ret i64
   :body
-  (const read-only 0)
-  (const seek-set 0)
-  (const seek-end 2)
-  (const file (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" read-only))
-  (const length (lseek file 0 seek-end))
+  (let read-only 0)
+  (let seek-set 0)
+  (let seek-end 2)
+  (let file (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" read-only))
+  (let length (lseek file 0 seek-end))
   (lseek file 0 seek-set)
   (print file)
   (print length))
