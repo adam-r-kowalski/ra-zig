@@ -12,13 +12,21 @@ pub const BlockIndex = usize;
 
 pub const Register = enum(usize) {
     Rax,
+    Eax,
     Rbx,
+    Ebx,
     Rcx,
+    Ecx,
     Rdx,
+    Edx,
     Rsp,
+    Esp,
     Rbp,
+    Ebp,
     Rsi,
+    Esi,
     Rdi,
+    Edi,
     R8,
     R9,
     R10,
@@ -76,8 +84,9 @@ pub const Kind = enum(u8) {
     Literal,
     Byte,
     QuadWord,
-    RelativeQuadWord,
-    StackOffset,
+    RelativeQword,
+    StackOffsetQword,
+    StackOffsetDword,
 };
 
 pub const Block = struct {

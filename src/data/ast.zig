@@ -3,9 +3,7 @@ const Allocator = std.mem.Allocator;
 const Arena = std.heap.ArenaAllocator;
 const List = @import("list.zig").List;
 
-pub const Source = struct {
-    input: []const u8
-};
+pub const Source = struct { input: []const u8 };
 
 pub const Kind = enum(u8) {
     Int,
@@ -14,6 +12,7 @@ pub const Kind = enum(u8) {
     Keyword,
     Parens,
     Brackets,
+    String,
 };
 
 pub const Ast = struct {

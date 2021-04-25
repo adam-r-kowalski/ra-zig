@@ -43,7 +43,7 @@ test "binary op between two signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*" };
+    const ops = [_][]const u8{ "add", "sub", "mul" };
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -90,7 +90,7 @@ test "binary op between three signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*" };
+    const ops = [_][]const u8{ "add", "sub", "mul" };
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -149,7 +149,7 @@ test "divide two signed integers" {
         \\  :body
         \\  (const x 20)
         \\  (const y 4)
-        \\  (/ x y))
+        \\  (div x y))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -185,7 +185,7 @@ test "binary op between two signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -238,7 +238,7 @@ test "binary op between signed float and comptime int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -291,7 +291,7 @@ test "binary op between comptime int and signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -344,7 +344,7 @@ test "binary op between three signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "+", "-", "*", "/" };
+    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -615,13 +615,57 @@ test "print three signed floats" {
     );
 }
 
+test "print string literal" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body (print "hello world"))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    defer x86.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    defer x86_string.deinit();
+    std.testing.expectEqualStrings(x86_string.slice(),
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte18: db "%s", 10, 0
+        \\byte17: db "hello world", 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rsi, byte17
+        \\    mov rdi, byte18
+        \\    xor rax, rax
+        \\    call _printf
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    );
+}
+
 test "user defined function single int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x i64)) :ret i64
-        \\  :body (* x x))
+        \\  :body (mul x x))
         \\
         \\(fn main :args () :ret i64
         \\  :body (square 6))
@@ -674,7 +718,7 @@ test "user defined function four ints" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
-        \\  :body (/ (- y2 y1) (- x2 x1)))
+        \\  :body (div (sub y2 y1) (sub x2 x1)))
         \\
         \\(fn main :args () :ret i64
         \\  :body (slope 0 10 5 20))
@@ -742,10 +786,10 @@ test "two user defined functions taking ints" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
-        \\  :body (/ (- y2 y1) (- x2 x1)))
+        \\  :body (div (sub y2 y1) (sub x2 x1)))
         \\
         \\(fn square :args ((x i64)) :ret i64
-        \\  :body (* x x))
+        \\  :body (mul x x))
         \\
         \\(fn main :args () :ret i64
         \\  :body
@@ -835,7 +879,7 @@ test "call user defined int function twice" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x i64)) :ret i64
-        \\  :body (* x x))
+        \\  :body (mul x x))
         \\
         \\(fn main :args () :ret i64
         \\  :body
@@ -897,7 +941,7 @@ test "user defined function single float" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x f64)) :ret f64
-        \\  :body (* x x))
+        \\  :body (mul x x))
         \\
         \\(fn main :args () :ret i64
         \\  :body
@@ -957,7 +1001,7 @@ test "user defined function two floats" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn mean :args ((x f64) (y f64)) :ret f64
-        \\  :body (/ (+ x y) 2))
+        \\  :body (div (add x y) 2))
         \\
         \\(fn main :args () :ret i64
         \\  :body
@@ -1026,7 +1070,7 @@ test "call user defined function float function twice" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x f64)) :ret f64
-        \\  :body (* x x))
+        \\  :body (mul x x))
         \\
         \\(fn main :args () :ret i64
         \\  :body
@@ -1161,4 +1205,104 @@ test "call user defined function with heterogeneous" {
         \\    pop rbp
         \\    ret
     );
+}
+
+test "open syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const o-rdonly 0)
+        \\  (const fd (open "file.txt" o-rdonly))
+        \\  (print fd))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte23: db "file.txt", 0
+        \\byte25: db "%d", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x2000005
+        \\    mov rdi, byte23
+        \\    mov esi, 0
+        \\    xor rdx, rdx
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov esi, dword [rbp-4]
+        \\    mov rdi, byte25
+        \\    xor rax, rax
+        \\    sub rsp, 4
+        \\    call _printf
+        \\    add rsp, 4
+        \\    sub rsp, 8
+        \\    mov qword [rbp-12], rax
+        \\    mov rdi, qword [rbp-12]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}
+
+test "lseek syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const fd 2)
+        \\  (const seek-end 2)
+        \\  (lseek fd 0 seek-end))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x20000C7
+        \\    mov edi, 2
+        \\    mov rsi, 0
+        \\    mov edx, 2
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
 }

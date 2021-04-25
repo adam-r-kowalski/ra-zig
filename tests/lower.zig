@@ -39,12 +39,12 @@ test "main" {
     );
 }
 
-test "unicode characters and compound expressions" {
+test "compound expressions" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn distance :args ((x f64) (y f64)) :ret f64
-        \\  :body (√ (+ (^ x 2) (^ y 2))))
+        \\  :body (sqrt (add (pow x 2) (pow y 2))))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -62,9 +62,9 @@ test "unicode characters and compound expressions" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name √)
-        \\    (entity :name +)
-        \\    (entity :name ^))
+        \\    (entity :name sqrt)
+        \\    (entity :name add)
+        \\    (entity :name pow))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -90,10 +90,10 @@ test "unicode characters and compound expressions" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const %t1 (^ x %t0))
-        \\    (const %t3 (^ y %t2))
-        \\    (const %t4 (+ %t1 %t3))
-        \\    (const %t5 (√ %t4))
+        \\    (const %t1 (pow x %t0))
+        \\    (const %t3 (pow y %t2))
+        \\    (const %t4 (add %t1 %t3))
+        \\    (const %t5 (sqrt %t4))
         \\    (return %t5)))
     );
 }
@@ -103,7 +103,7 @@ test "conditionals" {
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn max :args ((x i64) (y i64)) :ret i64
-        \\  :body (if (> x y) x y))
+        \\  :body (if (gt x y) x y))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -121,7 +121,7 @@ test "conditionals" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name >))
+        \\    (entity :name gt))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -146,7 +146,7 @@ test "conditionals" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const %t0 (> x y))
+        \\    (const %t0 (gt x y))
         \\    (branch %t0 %b4 %b5))
         \\  (block %b4 :scopes (%external %function %s3 %s4)
         \\    :expressions
@@ -161,15 +161,15 @@ test "conditionals" {
     );
 }
 
-test "int constants" {
+test "int literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
         \\  :body
-        \\  (const x2 (^ x 2))
-        \\  (const y2 (^ y 2))
-        \\  (+ x2 y2))
+        \\  (const x2 (pow x 2))
+        \\  (const y2 (pow y 2))
+        \\  (add x2 y2))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -187,8 +187,8 @@ test "int constants" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name ^)
-        \\    (entity :name +))
+        \\    (entity :name pow)
+        \\    (entity :name add))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -213,22 +213,22 @@ test "int constants" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const x2 (^ x %t0))
-        \\    (const y2 (^ y %t1))
-        \\    (const %t2 (+ x2 y2))
+        \\    (const x2 (pow x %t0))
+        \\    (const y2 (pow y %t1))
+        \\    (const %t2 (add x2 y2))
         \\    (return %t2)))
     );
 }
 
-test "float constants" {
+test "float literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn sum-of-squares :args ((x f64) (y f64)) :ret f64
         \\  :body
-        \\  (const x2 (^ x 2.0))
-        \\  (const y2 (^ y 2.0))
-        \\  (+ x2 y2))
+        \\  (const x2 (pow x 2.0))
+        \\  (const y2 (pow y 2.0))
+        \\  (add x2 y2))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -246,8 +246,8 @@ test "float constants" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name ^)
-        \\    (entity :name +))
+        \\    (entity :name pow)
+        \\    (entity :name add))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -272,10 +272,52 @@ test "float constants" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (const x2 (^ x %t0))
-        \\    (const y2 (^ y %t1))
-        \\    (const %t2 (+ x2 y2))
+        \\    (const x2 (pow x %t0))
+        \\    (const y2 (pow y %t1))
+        \\    (const %t2 (add x2 y2))
         \\    (return %t2)))
+    );
+}
+
+test "string literal" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn main :args () :ret i64
+        \\  :body
+        \\  (const filename "train.csv")
+        \\  (open filename))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn main
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external
+        \\    (entity :name open))
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name filename :value "train.csv")
+        \\    (entity :name %t0))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (const %t0 (open filename))
+        \\    (return %t0)))
     );
 }
 
@@ -284,10 +326,10 @@ test "overloading" {
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn area :args ((c circle)) :ret f64
-        \\  :body (* π (^ (radius c) 2)))
+        \\  :body (mul pi (pow (radius c) 2)))
         \\
         \\(fn area :args ((r rectangle)) :ret f64
-        \\  :body (* (width r) (height r)))
+        \\  :body (mul (width r) (height r)))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -306,9 +348,9 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name circle)
-        \\    (entity :name *)
-        \\    (entity :name π)
-        \\    (entity :name ^)
+        \\    (entity :name mul)
+        \\    (entity :name pi)
+        \\    (entity :name pow)
         \\    (entity :name radius))
         \\  (scope %function
         \\    (entity :name c))
@@ -329,8 +371,8 @@ test "overloading" {
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
         \\    (const %t0 (radius c))
-        \\    (const %t2 (^ %t0 %t1))
-        \\    (const %t3 (* π %t2))
+        \\    (const %t2 (pow %t0 %t1))
+        \\    (const %t3 (mul pi %t2))
         \\    (return %t3)))
         \\
         \\(fn area
@@ -341,7 +383,7 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name rectangle)
-        \\    (entity :name *)
+        \\    (entity :name mul)
         \\    (entity :name width)
         \\    (entity :name height))
         \\  (scope %function
@@ -363,7 +405,7 @@ test "overloading" {
         \\    :expressions
         \\    (const %t0 (width r))
         \\    (const %t1 (height r))
-        \\    (const %t2 (* %t0 %t1))
+        \\    (const %t2 (mul %t0 %t1))
         \\    (return %t2)))
     );
 }
