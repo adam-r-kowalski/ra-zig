@@ -28,13 +28,21 @@ pub const Register = enum(usize) {
     Rdi,
     Edi,
     R8,
+    R8D,
     R9,
+    R9D,
     R10,
+    R10D,
     R11,
+    R11D,
     R12,
+    R12D,
     R13,
+    R13D,
     R14,
+    R14D,
     R15,
+    R15D,
 };
 
 pub const SseRegister = enum(usize) {

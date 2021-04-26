@@ -38,7 +38,7 @@ _main:
     xor rdx, rdx			; SEEK_SET
     syscall
 
-    ; user_addr_t mmap(caddr_t addr, size_t len, int prot, int flags, int fd, off_t pos)
+    ; void* mmap(void* addr, size_t len, int prot, int flags, int fd, off_t pos)
     mov rax, 0x20000C5
     xor rdi, rdi			; NULL
     mov rsi, [rel file_length]

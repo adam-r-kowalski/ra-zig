@@ -22,7 +22,6 @@ const Phi = data.ir.Phi;
 const Entities = data.entity.Entities;
 const Entity = data.entity.Entity;
 const Builtins = data.entity.Builtins;
-const Strings = data.entity.Strings;
 const InternedStrings = data.entity.InternedStrings;
 const InternedString = data.entity.InternedString;
 
@@ -35,13 +34,11 @@ fn astChildren(ast: Ast, kind: AstKind, ast_entity: usize) Children {
     return ast.children.items[astIndex(ast, kind, ast_entity)].slice();
 }
 
+const builtin_count = @typeInfo(Builtins).Enum.fields.len - 1;
 fn lowerSymbol(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, ast_entity: usize) !Entity {
     const name = ast.indices.items[ast_entity];
     switch (name) {
-        @enumToInt(Strings.If) => return @enumToInt(Builtins.If),
-        @enumToInt(Strings.Let) => return @enumToInt(Builtins.Let),
-        @enumToInt(Strings.I64) => return @enumToInt(Builtins.I64),
-        @enumToInt(Strings.F64) => return @enumToInt(Builtins.F64),
+        0...builtin_count => return name,
         else => {
             const active_scopes = overload.blocks.items[active_block.*].active_scopes;
             var i: usize = active_scopes.len;
@@ -302,9 +299,12 @@ fn lowerOverload(ir: *Ir, entities: *Entities, function: *Function, ast: Ast, ch
         try keyword_to_children.putNoClobber(keyword, remaining_children[1..length]);
         remaining_children = remaining_children[length..];
     }
-    try lowerParameters(ir, entities, overload, ast, keyword_to_children.get(@enumToInt(Strings.Args)).?);
-    try lowerReturnType(ir, entities, overload, ast, keyword_to_children.get(@enumToInt(Strings.Ret)).?);
-    try lowerBody(ir, entities, overload, ast, keyword_to_children.get(@enumToInt(Strings.Body)).?);
+    const args = entities.interned_strings.mapping.get(":args").?;
+    try lowerParameters(ir, entities, overload, ast, keyword_to_children.get(args).?);
+    const ret = entities.interned_strings.mapping.get(":ret").?;
+    try lowerReturnType(ir, entities, overload, ast, keyword_to_children.get(ret).?);
+    const body = entities.interned_strings.mapping.get(":body").?;
+    try lowerBody(ir, entities, overload, ast, keyword_to_children.get(body).?);
 }
 
 fn createOrOverloadFunction(ir: *Ir, ast: Ast, ast_entity: usize) !*Function {
@@ -341,7 +341,7 @@ pub fn lower(allocator: *Allocator, entities: *Entities, ast: Ast) !Ir {
     };
     for (ast.top_level.slice()) |index| {
         const children = astChildren(ast, .Parens, index);
-        assert(astIndex(ast, .Symbol, children[0]) == @enumToInt(Strings.Fn));
+        assert(astIndex(ast, .Symbol, children[0]) == @enumToInt(Builtins.Fn));
         const function = try createOrOverloadFunction(&ir, ast, children[1]);
         try lowerOverload(&ir, entities, function, ast, children[2..]);
     }

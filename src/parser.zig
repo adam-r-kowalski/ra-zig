@@ -7,7 +7,6 @@ const Ast = data.ast.Ast;
 const Kind = data.ast.Kind;
 const Source = data.ast.Source;
 const InternedStrings = data.entity.InternedStrings;
-const Strings = data.entity.Strings;
 const internString = data.entity.internString;
 const Entities = data.entity.Entities;
 const List = data.List;
@@ -30,7 +29,7 @@ fn insert(kind: Kind, ast: *Ast, entities: *Entities, source: *Source, length: u
 
 fn number(ast: *Ast, entities: *Entities, source: *Source, seen_decimal: usize) !usize {
     var decimal_count = seen_decimal;
-    var length: usize = 0;
+    var length: usize = 1;
     while (length < source.input.len) : (length += 1) {
         switch (source.input[length]) {
             '0'...'9' => continue,
@@ -38,6 +37,8 @@ fn number(ast: *Ast, entities: *Entities, source: *Source, seen_decimal: usize) 
             else => break,
         }
     }
+    if (length == 1 and source.input[0] == '-')
+        return try insert(.Symbol, ast, entities, source, length);
     const kind = if (decimal_count > 0) Kind.Float else Kind.Int;
     return try insert(kind, ast, entities, source, length);
 }
@@ -89,7 +90,7 @@ fn trimWhitespace(source: *Source) void {
 fn expression(ast: *Ast, entities: *Entities, source: *Source) error{OutOfMemory}!usize {
     trimWhitespace(source);
     return switch (source.input[0]) {
-        '0'...'9' => try number(ast, entities, source, 0),
+        '0'...'9', '-' => try number(ast, entities, source, 0),
         '.' => try number(ast, entities, source, 1),
         '(' => try list(.Parens, ')', ast, entities, source),
         '[' => try list(.Brackets, ']', ast, entities, source),

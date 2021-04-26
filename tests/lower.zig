@@ -63,7 +63,6 @@ test "compound expressions" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name sqrt)
-        \\    (entity :name add)
         \\    (entity :name pow))
         \\  (scope %function
         \\    (entity :name x)
@@ -103,7 +102,7 @@ test "conditionals" {
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn max :args ((x i64) (y i64)) :ret i64
-        \\  :body (if (gt x y) x y))
+        \\  :body (if (greater x y) x y))
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -121,7 +120,7 @@ test "conditionals" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name gt))
+        \\    (entity :name greater))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -146,7 +145,7 @@ test "conditionals" {
         \\    (return i64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (let %t0 (gt x y))
+        \\    (let %t0 (greater x y))
         \\    (branch %t0 %b4 %b5))
         \\  (block %b4 :scopes (%external %function %s3 %s4)
         \\    :expressions
@@ -187,8 +186,7 @@ test "int literal" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name pow)
-        \\    (entity :name add))
+        \\    (entity :name pow))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -246,8 +244,7 @@ test "float literal" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name pow)
-        \\    (entity :name add))
+        \\    (entity :name pow))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -303,8 +300,7 @@ test "string literal" {
         \\  :return-type-blocks %b0
         \\  :body-block %b1
         \\  :scopes
-        \\  (scope %external
-        \\    (entity :name open))
+        \\  (scope %external)
         \\  (scope %function)
         \\  (scope %s0)
         \\  (scope %s1
@@ -348,7 +344,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name circle)
-        \\    (entity :name mul)
         \\    (entity :name pi)
         \\    (entity :name pow)
         \\    (entity :name radius))
@@ -383,7 +378,6 @@ test "overloading" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name rectangle)
-        \\    (entity :name mul)
         \\    (entity :name width)
         \\    (entity :name height))
         \\  (scope %function

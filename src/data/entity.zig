@@ -13,18 +13,6 @@ pub const InternedStrings = struct {
 
 pub const Entity = usize;
 
-pub const Builtins = enum(Entity) {
-    If,
-    Let,
-    Int,
-    I64,
-    I32,
-    U8,
-    Float,
-    F64,
-    Array,
-};
-
 pub fn internString(entities: *Entities, string: []const u8) !InternedString {
     const result = try entities.interned_strings.mapping.getOrPut(string);
     if (result.found_existing)
@@ -36,25 +24,46 @@ pub fn internString(entities: *Entities, string: []const u8) !InternedString {
     return index;
 }
 
-pub const Strings = enum(InternedString) {
+pub const Builtins = enum(Entity) {
     Fn,
-    Args,
-    Ret,
-    Body,
     If,
     Let,
     Int,
     I64,
+    I32,
+    U8,
     Float,
     F64,
+    Array,
+    Ptr,
+    Null,
+    Void,
     Add,
     Sub,
     Mul,
     Div,
-    BitOr,
+    Bit_Or,
     Print,
     Open,
     Lseek,
+    Mmap,
+};
+
+pub const names = blk: {
+    const fields = @typeInfo(Builtins).Enum.fields;
+    var data: [fields.len][]const u8 = undefined;
+    for (fields) |field, i| {
+        var name: [field.name.len]u8 = undefined;
+        for (field.name) |c, j| {
+            switch (c) {
+                'A'...'Z' => name[j] = std.ascii.toLower(c),
+                '_' => name[j] = '-',
+                else => name[j] = c,
+            }
+        }
+        data[i] = name[0..];
+    }
+    break :blk data;
 };
 
 pub const Status = enum { Unanalyzed, Analyzed };
@@ -71,16 +80,25 @@ pub const Arrays = struct {
     lengths: List(usize),
 };
 
+fn loadBuiltinEntities(entities: *Entities) !void {
+    for (names) |name, i| {
+        const interned_string = try internString(entities, name);
+        try entities.names.putNoClobber(i, interned_string);
+    }
+}
+
 pub const Entities = struct {
     names: Map(Entity, InternedString),
     literals: Map(Entity, InternedString),
     types: Map(Entity, Entity),
     overload_index: Map(Entity, usize),
     array_index: Map(Entity, usize),
+    pointer_index: Map(Entity, usize),
     next_entity: Entity,
     interned_strings: InternedStrings,
     overloads: Overloads,
     arrays: Arrays,
+    pointers: List(Entity),
     arena: *Arena,
 
     pub fn init(allocator: *Allocator) !Entities {
@@ -93,6 +111,7 @@ pub const Entities = struct {
             .types = Map(Entity, Entity).init(&arena.allocator),
             .overload_index = Map(Entity, usize).init(&arena.allocator),
             .array_index = Map(Entity, usize).init(&arena.allocator),
+            .pointer_index = Map(Entity, usize).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
                 .data = List([]const u8).init(&arena.allocator),
@@ -108,26 +127,10 @@ pub const Entities = struct {
                 .types = List(Entity).init(&arena.allocator),
                 .lengths = List(usize).init(&arena.allocator),
             },
+            .pointers = List(Entity).init(&arena.allocator),
             .arena = arena,
         };
-        _ = try internString(&entities, "fn");
-        _ = try internString(&entities, ":args");
-        _ = try internString(&entities, ":ret");
-        _ = try internString(&entities, ":body");
-        _ = try internString(&entities, "if");
-        _ = try internString(&entities, "let");
-        _ = try internString(&entities, "int");
-        _ = try internString(&entities, "i64");
-        _ = try internString(&entities, "float");
-        _ = try internString(&entities, "f64");
-        _ = try internString(&entities, "add");
-        _ = try internString(&entities, "sub");
-        _ = try internString(&entities, "mul");
-        _ = try internString(&entities, "div");
-        _ = try internString(&entities, "bit-or");
-        _ = try internString(&entities, "print");
-        _ = try internString(&entities, "open");
-        _ = try internString(&entities, "lseek");
+        try loadBuiltinEntities(&entities);
         return entities;
     }
 

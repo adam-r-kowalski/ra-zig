@@ -6,7 +6,6 @@ const data = @import("data.zig");
 const InternedStrings = data.entity.InternedStrings;
 const InternedString = data.entity.InternedString;
 const internString = data.entity.internString;
-const Strings = data.entity.Strings;
 const Entity = data.entity.Entity;
 const Entities = data.entity.Entities;
 const Builtins = data.entity.Builtins;
@@ -35,6 +34,8 @@ const U8 = @enumToInt(Builtins.U8);
 const Float = @enumToInt(Builtins.Float);
 const F64 = @enumToInt(Builtins.F64);
 const Array = @enumToInt(Builtins.Array);
+const Ptr = @enumToInt(Builtins.Ptr);
+const Void = @enumToInt(Builtins.Void);
 
 const InternedInts = Map(usize, InternedString);
 
@@ -64,7 +65,7 @@ const RegisterSize = enum(u8) { Dword, Qword };
 
 fn registerSize(reg: Register) RegisterSize {
     return switch (reg) {
-        .Eax, .Ebx, .Ecx, .Edx, .Esp, .Ebp, .Esi, .Edi => .Dword,
+        .Eax, .Ebx, .Ecx, .Edx, .Esp, .Ebp, .Esi, .Edi, .R8D, .R9D, .R10D, .R11D, .R12D, .R13D, .R14D, .R15D => .Dword,
         .Rax, .Rbx, .Rcx, .Rdx, .Rsp, .Rbp, .Rsi, .Rdi, .R8, .R9, .R10, .R11, .R12, .R13, .R14, .R15 => .Qword,
     };
 }
@@ -256,19 +257,6 @@ fn restoreStack(context: Context, offset: usize) !void {
     const interned = try internInt(context, offset);
     try opRegLiteral(context, .Add, .Rsp, interned);
     context.stack.top -= offset;
-}
-
-fn nameOf(context: Context, entity: Entity) ?InternedString {
-    switch (entity) {
-        Int => return @enumToInt(Strings.Int),
-        I64 => return @enumToInt(Strings.I64),
-        Float => return @enumToInt(Strings.Float),
-        F64 => return @enumToInt(Strings.F64),
-        else => {
-            if (context.entities.names.get(entity)) |name| return name;
-            return null;
-        },
-    }
 }
 
 fn codegenPrintI64(context: Context, call: Call) !void {
@@ -607,18 +595,62 @@ fn codegenLseek(context: Context, call: Call) !void {
     try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
+fn codegenMmap(context: Context, call: Call) !void {
+    // void* mmap(void* addr, size_t len, int prot, int flags, int fd, off_t pos)
+    assert(call.argument_entities.len == 6);
+    const mmap_syscall = try internString(context.entities, "0x20000C5");
+    try opRegLiteral(context, .Mov, .Rax, mmap_syscall);
+
+    const addr = call.argument_entities[0];
+    assert(context.entities.types.get(addr).? == Ptr);
+    assert(context.entities.pointers.items[context.entities.pointer_index.get(addr).?] == Void);
+    try moveToRegister(context, .Rdi, addr);
+
+    const len = call.argument_entities[1];
+    assert(context.entities.types.get(len).? == I64 or context.entities.types.get(len).? == Int);
+    try moveToRegister(context, .Rsi, len);
+
+    const prot = call.argument_entities[2];
+    assert(context.entities.types.get(prot).? == I32 or context.entities.types.get(prot).? == Int);
+    try moveToRegister(context, .Edx, prot);
+
+    const flags = call.argument_entities[3];
+    assert(context.entities.types.get(flags).? == I32 or context.entities.types.get(flags).? == Int);
+    try moveToRegister(context, .Ecx, flags);
+
+    const fd = call.argument_entities[4];
+    assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
+    try moveToRegister(context, .R8D, fd);
+
+    const pos = call.argument_entities[5];
+    assert(context.entities.types.get(pos).? == I64 or context.entities.types.get(pos).? == Int);
+    try moveToRegister(context, .R9, pos);
+
+    try opRegLiteral(context, .Mov, .R10, try internString(context.entities, "0x1002"));
+
+    try opNoArgs(context.x86_block, .Syscall);
+    context.stack.top += 8;
+    const stack_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, stack_offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, stack_offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, Ptr);
+}
+
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
-    const name = nameOf(context, call.function_entity).?;
+    const name = context.entities.names.get(call.function_entity).?;
     switch (name) {
-        @enumToInt(Strings.Add) => try codegenBinaryOp(context, call, AddOps),
-        @enumToInt(Strings.Sub) => try codegenBinaryOp(context, call, SubOps),
-        @enumToInt(Strings.Mul) => try codegenBinaryOp(context, call, MulOps),
-        @enumToInt(Strings.Div) => try codegenDivide(context, call),
-        @enumToInt(Strings.BitOr) => try codegenBitOr(context, call),
-        @enumToInt(Strings.Print) => try codegenPrint(context, call),
-        @enumToInt(Strings.Open) => try codegenOpen(context, call),
-        @enumToInt(Strings.Lseek) => try codegenLseek(context, call),
+        @enumToInt(Builtins.Add) => try codegenBinaryOp(context, call, AddOps),
+        @enumToInt(Builtins.Sub) => try codegenBinaryOp(context, call, SubOps),
+        @enumToInt(Builtins.Mul) => try codegenBinaryOp(context, call, MulOps),
+        @enumToInt(Builtins.Div) => try codegenDivide(context, call),
+        @enumToInt(Builtins.Bit_Or) => try codegenBitOr(context, call),
+        @enumToInt(Builtins.Print) => try codegenPrint(context, call),
+        @enumToInt(Builtins.Open) => try codegenOpen(context, call),
+        @enumToInt(Builtins.Lseek) => try codegenLseek(context, call),
+        @enumToInt(Builtins.Mmap) => try codegenMmap(context, call),
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
@@ -900,13 +932,21 @@ fn writeRegister(output: *List(u8), register: Register) !void {
         .Rdi => try output.insertSlice("rdi"),
         .Edi => try output.insertSlice("edi"),
         .R8 => try output.insertSlice("r8"),
+        .R8D => try output.insertSlice("r8d"),
         .R9 => try output.insertSlice("r9"),
+        .R9D => try output.insertSlice("r9d"),
         .R10 => try output.insertSlice("r10"),
+        .R10D => try output.insertSlice("r10d"),
         .R11 => try output.insertSlice("r11"),
+        .R11D => try output.insertSlice("r11d"),
         .R12 => try output.insertSlice("r12"),
+        .R12D => try output.insertSlice("r12d"),
         .R13 => try output.insertSlice("r13"),
+        .R13D => try output.insertSlice("r13d"),
         .R14 => try output.insertSlice("r14"),
+        .R14D => try output.insertSlice("r14d"),
         .R15 => try output.insertSlice("r15"),
+        .R15D => try output.insertSlice("r15d"),
     }
 }
 

@@ -9,7 +9,7 @@ var astString = lang.astString;
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "123 475 923";
+    const source = "123 475 -923";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -19,7 +19,7 @@ test "int" {
     expectEqualStrings(ast_string.slice(),
         \\(int 123)
         \\(int 475)
-        \\(int 923)
+        \\(int -923)
     );
 }
 
@@ -43,7 +43,7 @@ test "float" {
 test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "foo bar baz";
+    const source = "foo bar baz -";
     var entities = try lang.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -54,6 +54,7 @@ test "symbol" {
         \\(symbol foo)
         \\(symbol bar)
         \\(symbol baz)
+        \\(symbol -)
     );
 }
 
