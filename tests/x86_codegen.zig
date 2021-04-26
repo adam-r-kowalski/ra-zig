@@ -1348,50 +1348,50 @@ test "bit-or" {
     x86_string.deinit();
 }
 
-// test "mmap syscall" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn start :args () :ret i64
-//         \\  :body
-//         \\  (let prot-read 1)
-//         \\  (let prot-write 2)
-//         \\  (let map-private 0)
-//         \\  (let map-anonymous 1)
-//         \\  (let prot (bit-or prot-read prot-write))
-//         \\  (let flags (bit-or map-private map-anonymous))
-//         \\  (let len 4096)
-//         \\  (let data (mmap null len prot flags -1 0)))
-//     ;
-//     var entities = try lang.data.Entities.init(&gpa.allocator);
-//     var ast = try lang.parse(allocator, &entities, source);
-//     var ir = try lang.lower(allocator, &entities, ast);
-//     ast.deinit();
-//     var x86 = try lang.codegen(allocator, &entities, ir);
-//     ir.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, entities);
-//     entities.deinit();
-//     x86.deinit();
-//     const expected =
-//         \\    global _main
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    push rbp
-//         \\    mov rbp, rsp
-//         \\    mov rax, 0x20000C7
-//         \\    mov edi, 2
-//         \\    mov rsi, 0
-//         \\    mov edx, 2
-//         \\    syscall
-//         \\    sub rsp, 8
-//         \\    mov qword [rbp-8], rax
-//         \\    mov rdi, qword [rbp-8]
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     ;
-//     expectEqualStrings(x86_string.slice(), expected);
-//     x86_string.deinit();
-// }
+test "mmap syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let prot-read 1)
+        \\  (let prot-write 2)
+        \\  (let map-private 0)
+        \\  (let map-anonymous 1)
+        \\  (let prot (bit-or prot-read prot-write))
+        \\  (let flags (bit-or map-private map-anonymous))
+        \\  (let len 4096)
+        \\  (let data (mmap null len prot flags -1 0)))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x20000C7
+        \\    mov edi, 2
+        \\    mov rsi, 0
+        \\    mov edx, 2
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}

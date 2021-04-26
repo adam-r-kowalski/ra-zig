@@ -25,9 +25,11 @@ pub fn internString(entities: *Entities, string: []const u8) !InternedString {
 }
 
 pub const Builtins = enum(Entity) {
+    Special_Form,
     Fn,
     If,
     Let,
+    Type,
     Int,
     I64,
     I32,
@@ -36,8 +38,8 @@ pub const Builtins = enum(Entity) {
     F64,
     Array,
     Ptr,
-    Null,
     Void,
+    Null,
     Add,
     Sub,
     Mul,
@@ -85,6 +87,18 @@ fn loadBuiltinEntities(entities: *Entities) !void {
         const interned_string = try internString(entities, name);
         try entities.names.putNoClobber(i, interned_string);
     }
+    for ([_]Builtins{ .Fn, .If, .Let }) |entity| {
+        try entities.types.putNoClobber(@enumToInt(entity), @enumToInt(Builtins.Special_Form));
+    }
+    for ([_]Builtins{ .Type, .Int, .I64, .I32, .U8, .Float, .F64, .Array, .Ptr, .Void }) |entity| {
+        try entities.types.putNoClobber(@enumToInt(entity), @enumToInt(Builtins.Type));
+    }
+    const Null = @enumToInt(Builtins.Null);
+    try entities.types.putNoClobber(Null, @enumToInt(Builtins.Ptr));
+    const index = try entities.pointers.insert(@enumToInt(Builtins.Void));
+    try entities.pointer_index.putNoClobber(Null, index);
+    const zero = try internString(entities, "0");
+    try entities.literals.putNoClobber(Null, zero);
 }
 
 pub const Entities = struct {

@@ -371,13 +371,11 @@ const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
 fn moveToRegister(context: Context, register: Register, entity: Entity) !void {
     if (context.entities.literals.get(entity)) |value| {
-        assert(context.entities.types.get(entity).? == @enumToInt(Builtins.Int));
         try opRegLiteral(context, .Mov, register, value);
-    } else if (context.stack.entity.get(entity)) |offset| {
-        try opRegStack(context, .Mov, register, offset);
-    } else {
-        unreachable;
+        return;
     }
+    const offset = context.stack.entity.get(entity).?;
+    try opRegStack(context, .Mov, register, offset);
 }
 
 fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !void {
@@ -596,7 +594,6 @@ fn codegenLseek(context: Context, call: Call) !void {
 }
 
 fn codegenMmap(context: Context, call: Call) !void {
-    // void* mmap(void* addr, size_t len, int prot, int flags, int fd, off_t pos)
     assert(call.argument_entities.len == 6);
     const mmap_syscall = try internString(context.entities, "0x20000C5");
     try opRegLiteral(context, .Mov, .Rax, mmap_syscall);
