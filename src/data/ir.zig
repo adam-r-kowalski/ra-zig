@@ -24,6 +24,7 @@ pub const ExpressionKind = enum(u8) {
     Branch,
     Phi,
     Jump,
+    TypedLet,
 };
 
 pub const Call = struct {
@@ -46,11 +47,17 @@ pub const Phi = struct {
     else_entity: Entity,
 };
 
+pub const TypedLet = struct {
+    entity: Entity,
+    type_entity: Entity,
+};
+
 pub const Block = struct {
     active_scopes: []const usize,
     kinds: List(ExpressionKind),
     indices: List(usize),
     returns: List(Entity),
+    typed_lets: List(TypedLet),
     calls: List(Call),
     branches: List(Branch),
     phis: List(Phi),

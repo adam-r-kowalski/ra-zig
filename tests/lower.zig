@@ -39,6 +39,84 @@ test "start" {
     );
 }
 
+test "let binding" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let x 0)
+        \\  x)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn start
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name x :value 0))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return x)))
+    );
+}
+
+test "explicitly typed let" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let x i64 0)
+        \\  x)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn start
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name x :value 0))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return x)))
+    );
+}
+
 test "compound expressions" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());

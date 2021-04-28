@@ -3,7 +3,7 @@
   (loop
     (let current (deref buffer))
     (inc! buffer)
-    (when (eq current target)
+    (when (equal current target)
       (dec! times)
       (when (zero? times) (return buffer)))))
 
@@ -29,12 +29,12 @@
   (loop
     (inc! total)
     (set! buffer (readtill buffer ',' 1))
-    (let alive (eq (deref buffer) '1'))
+    (let alive (equal (deref buffer) '1'))
     (set! buffer (readtill buffer ',' 4))
-    (let male (eq (deref buffer) 'm'))
+    (let male (equal (deref buffer) 'm'))
     (set! buffer (readtill buffer '\n' 1))
     (add! correct (or (and male (not alive)) (and (not male) alive)))
-    (when (eq (deref buffer) '\0') (break)))
+    (when (equal (deref buffer) '\0') (break)))
   (div correct total))
 
 (fn start :args () :ret i64

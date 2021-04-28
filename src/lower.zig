@@ -19,6 +19,7 @@ const Block = data.ir.Block;
 const Call = data.ir.Call;
 const Branch = data.ir.Branch;
 const Phi = data.ir.Phi;
+const TypedLet = data.ir.TypedLet;
 const Entities = data.entity.Entities;
 const Entity = data.entity.Entity;
 const Builtins = data.entity.Builtins;
@@ -127,14 +128,27 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
 
 fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
-    const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
-    assert(children.len == 2);
-    const result = try entities.names.getOrPut(entity);
-    assert(!result.found_existing);
-    result.entry.value = name;
-    const active_scopes = overload.blocks.items[active_block.*].active_scopes;
-    try overload.scopes.items[active_scopes[active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
-    return entity;
+    switch (children.len) {
+        2 => {
+            const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
+            try entities.names.putNoClobber(entity, name);
+            const block = &overload.blocks.items[active_block.*];
+            try overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
+            return entity;
+        },
+        3 => {
+            const type_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
+            const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[2]);
+            try entities.names.putNoClobber(entity, name);
+            const block = &overload.blocks.items[active_block.*];
+            try overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
+            _ = try block.kinds.insert(.TypedLet);
+            const typed_let = try block.typed_lets.insert(.{ .entity = entity, .type_entity = type_entity });
+            _ = try block.indices.insert(typed_let);
+            return entity;
+        },
+        else => unreachable,
+    }
 }
 
 fn lowerCall(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, function_entity: Entity, children: Children) !Entity {
@@ -190,7 +204,8 @@ fn newBlockAndScope(allocator: *Allocator, overload: *Overload, currently_active
     block.active_scopes = active_scopes;
     block.kinds = List(ExpressionKind).init(allocator);
     block.indices = List(usize).init(allocator);
-    block.returns = List(usize).init(allocator);
+    block.returns = List(Entity).init(allocator);
+    block.typed_lets = List(TypedLet).init(allocator);
     block.calls = List(Call).init(allocator);
     block.branches = List(Branch).init(allocator);
     block.phis = List(Phi).init(allocator);
@@ -424,19 +439,12 @@ fn writeActiveScopes(output: *List(u8), block: Block) !void {
     }
 }
 
-fn writeEntity(writer: Writer, block_entity: usize) !void {
+fn writeName(writer: Writer, entity: usize) !void {
     const output = writer.output;
-    const overload = writer.overload;
-    switch (block_entity) {
-        @enumToInt(Builtins.I64) => try output.insertSlice("i64"),
-        @enumToInt(Builtins.F64) => try output.insertSlice("f64"),
-        else => {
-            if (writer.entities.names.get(block_entity)) |string_index| {
-                try output.insertSlice(writer.entities.interned_strings.data.items[string_index]);
-            } else if (writer.anonymous_entity_to_name.get(block_entity)) |name| {
-                try output.insertFormatted("%t{}", .{name});
-            }
-        },
+    if (writer.entities.names.get(entity)) |string_index| {
+        try output.insertSlice(writer.entities.interned_strings.data.items[string_index]);
+    } else if (writer.anonymous_entity_to_name.get(entity)) |name| {
+        try output.insertFormatted("%t{}", .{name});
     }
 }
 
@@ -444,7 +452,7 @@ fn writeReturn(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     try output.insertSlice("\n    (return ");
     const entity = block.returns.items[block.indices.items[block_entity]];
-    try writeEntity(writer, entity);
+    try writeName(writer, entity);
     _ = try output.insert(')');
 }
 
@@ -452,12 +460,12 @@ fn writeCall(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const call = block.calls.items[block.indices.items[block_entity]];
     try output.insertSlice("\n    (let ");
-    try writeEntity(writer, call.result_entity);
+    try writeName(writer, call.result_entity);
     try output.insertSlice(" (");
-    try writeEntity(writer, call.function_entity);
+    try writeName(writer, call.function_entity);
     for (call.argument_entities) |argument_entity| {
         _ = try output.insert(' ');
-        try writeEntity(writer, argument_entity);
+        try writeName(writer, argument_entity);
     }
     try output.insertSlice("))");
 }
@@ -466,7 +474,7 @@ fn writeBranch(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const branch = block.branches.items[block.indices.items[block_entity]];
     try output.insertSlice("\n    (branch ");
-    try writeEntity(writer, branch.condition_entity);
+    try writeName(writer, branch.condition_entity);
     try output.insertFormatted(" %b{} %b{})", .{ branch.then_block_index, branch.else_block_index });
 }
 
@@ -474,12 +482,12 @@ fn writePhi(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const phi = block.phis.items[block.indices.items[block_entity]];
     try output.insertSlice("\n    (let ");
-    try writeEntity(writer, phi.result_entity);
+    try writeName(writer, phi.result_entity);
     try output.insertSlice(" (phi ");
     try output.insertFormatted("(%b{} ", .{phi.then_block_index});
-    try writeEntity(writer, phi.then_entity);
+    try writeName(writer, phi.then_entity);
     try output.insertFormatted(") (%b{} ", .{phi.else_block_index});
-    try writeEntity(writer, phi.else_entity);
+    try writeName(writer, phi.else_entity);
     try output.insertSlice(")))");
 }
 
@@ -498,6 +506,7 @@ fn writeExpressions(writer: Writer, block: Block) !void {
             .Branch => try writeBranch(writer, block, entity),
             .Phi => try writePhi(writer, block, entity),
             .Jump => try writeJump(writer, block, entity),
+            .TypedLet => continue,
         }
     }
 }

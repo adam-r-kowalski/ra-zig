@@ -36,6 +36,7 @@ const F64 = @enumToInt(Builtins.F64);
 const Array = @enumToInt(Builtins.Array);
 const Ptr = @enumToInt(Builtins.Ptr);
 const Void = @enumToInt(Builtins.Void);
+const Type = @enumToInt(Builtins.Type);
 
 const InternedInts = Map(usize, InternedString);
 
@@ -525,7 +526,8 @@ fn codegenBitOr(context: Context, call: Call) !void {
     const rhs = call.argument_entities[1];
     try moveToRegister(context, .Rax, lhs);
     if (context.entities.literals.get(rhs)) |value| {
-        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        const rhs_type = context.entities.types.get(rhs).?;
+        assert(rhs_type == Int or rhs_type == I64);
         try opRegLiteral(context, .Mov, .Rcx, value);
         try opRegReg(context, .Or, .Rax, .Rcx);
     } else if (context.stack.entity.get(rhs)) |offset| {
@@ -860,6 +862,26 @@ fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
                 try opNoArgs(x86_block, .Syscall);
             },
             .Call => try codegenCall(context, i),
+            .TypedLet => {
+                const typed_let = context.ir_block.typed_lets.items[context.ir_block.indices.items[i]];
+                assert(entities.types.get(typed_let.type_entity).? == Type);
+                const type_of = entities.types.get(typed_let.entity).?;
+                switch (type_of) {
+                    Int => {
+                        switch (typed_let.type_entity) {
+                            Int, I64, I32 => try entities.types.put(typed_let.entity, typed_let.type_entity),
+                            else => unreachable,
+                        }
+                    },
+                    Float => {
+                        switch (typed_let.type_entity) {
+                            Float, F64 => try entities.types.put(typed_let.entity, typed_let.type_entity),
+                            else => unreachable,
+                        }
+                    },
+                    else => assert(type_of == typed_let.type_entity),
+                }
+            },
             else => unreachable,
         }
     }
