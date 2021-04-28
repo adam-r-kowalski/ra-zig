@@ -520,14 +520,10 @@ fn codegenDivide(context: Context, call: Call) !void {
     }
 }
 
-fn codegenBitOr(context: Context, call: Call) !void {
-    assert(call.argument_entities.len == 2);
-    const lhs = call.argument_entities[0];
-    const rhs = call.argument_entities[1];
+fn codegenBitOrI64(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
     try moveToRegister(context, .Rax, lhs);
     if (context.entities.literals.get(rhs)) |value| {
         const rhs_type = context.entities.types.get(rhs).?;
-        assert(rhs_type == Int or rhs_type == I64);
         try opRegLiteral(context, .Mov, .Rcx, value);
         try opRegReg(context, .Or, .Rax, .Rcx);
     } else if (context.stack.entity.get(rhs)) |offset| {
@@ -542,6 +538,48 @@ fn codegenBitOr(context: Context, call: Call) !void {
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, offset, .Rax);
     try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
+fn codegenBitOrI32(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
+    try moveToRegister(context, .Eax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        const rhs_type = context.entities.types.get(rhs).?;
+        try opRegLiteral(context, .Mov, .Ecx, value);
+        try opRegReg(context, .Or, .Eax, .Ecx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, .Or, .Eax, offset);
+    } else {
+        unreachable;
+    }
+    context.stack.top += 4;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const four = try internInt(context, 4);
+    try opRegLiteral(context, .Sub, .Rsp, four);
+    try opStackReg(context, .Mov, offset, .Eax);
+    try context.entities.types.putNoClobber(call.result_entity, I32);
+}
+
+fn codegenBitOr(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs = call.argument_entities[0];
+    const rhs = call.argument_entities[1];
+    switch (context.entities.types.get(lhs).?) {
+        Int => switch (context.entities.types.get(rhs).?) {
+            Int, I64 => try codegenBitOrI64(context, call, lhs, rhs),
+            I32 => try codegenBitOrI32(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        I64 => switch (context.entities.types.get(rhs).?) {
+            Int, I64 => try codegenBitOrI32(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        I32 => switch (context.entities.types.get(rhs).?) {
+            Int, I32 => try codegenBitOrI32(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        else => unreachable,
+    }
 }
 
 fn codegenOpen(context: Context, call: Call) !void {

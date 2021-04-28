@@ -1380,8 +1380,8 @@ test "let with explicit type" {
         \\    mov ecx, 2
         \\    or eax, ecx
         \\    sub rsp, 4
-        \\    mov qword [rbp-4], eax
-        \\    mov edi, dword [rbp-4]
+        \\    mov dword [rbp-4], eax
+        \\    mov rdi, qword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1396,10 +1396,10 @@ test "mmap syscall" {
     const source =
         \\(fn start :args () :ret i64
         \\  :body
-        \\  (let prot-read 1)
-        \\  (let prot-write 2)
-        \\  (let map-private 0)
-        \\  (let map-anonymous 1)
+        \\  (let prot-read i32 1)
+        \\  (let prot-write i32 2)
+        \\  (let map-private i32 0)
+        \\  (let map-anonymous i32 1)
         \\  (let prot (bit-or prot-read prot-write))
         \\  (let flags (bit-or map-private map-anonymous))
         \\  (let len 4096)
@@ -1422,14 +1422,28 @@ test "mmap syscall" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rax, 0x20000C7
-        \\    mov edi, 2
-        \\    mov rsi, 0
-        \\    mov edx, 2
+        \\    mov eax, 1
+        \\    mov ecx, 2
+        \\    or eax, ecx
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov eax, 0
+        \\    mov ecx, 1
+        \\    or eax, ecx
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov rax, 0x20000C5
+        \\    mov rdi, 0
+        \\    mov rsi, 4096
+        \\    mov edx, dword [rbp-4]
+        \\    mov ecx, dword [rbp-8]
+        \\    mov r8d, -1
+        \\    mov r9, 0
+        \\    mov r10, 0x1002
         \\    syscall
         \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, qword [rbp-16]
         \\    mov rax, 0x02000001
         \\    syscall
     ;

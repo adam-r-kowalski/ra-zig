@@ -1,10 +1,5 @@
 (fn start :args () :ret i64
   :body
-  (let read-only 0)
-  (let seek-set 0)
-  (let seek-end 2)
-  (let file (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" read-only))
-  (let length (lseek file 0 seek-end))
-  (lseek file 0 seek-set)
-  (print file)
-  (print length))
+  (let prot-read i32 1)
+  (let prot-write i32 2)
+  (bit-or prot-read prot-write))
