@@ -1,5 +1,20 @@
 (fn start :args () :ret i64
   :body
+  (let o-rdonly 0)
+  (let seek-set 0)
+  (let seek-end 2)
   (let prot-read i32 1)
   (let prot-write i32 2)
-  (bit-or prot-read prot-write))
+  (let prot (bit-or prot-read prot-write))
+  (let map-private i32 0)
+  (let map-anonymous i32 1)
+  (let flags (bit-or map-private map-anonymous))
+  (let fd (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" o-rdonly))
+  (let len (lseek fd 0 seek-end))
+  (lseek fd 0 seek-set)
+  (let data (mmap null len prot flags -1 0))
+  (let bytes (read fd data len))
+  (print fd)
+  (print len)
+  (print bytes))
+  

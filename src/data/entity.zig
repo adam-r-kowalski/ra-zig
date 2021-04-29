@@ -49,6 +49,7 @@ pub const Builtins = enum(Entity) {
     Open,
     Lseek,
     Mmap,
+    Read,
 };
 
 pub const names = blk: {

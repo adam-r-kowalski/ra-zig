@@ -349,6 +349,34 @@ fn codegenPrintArray(context: Context, call: Call) !void {
     try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
+fn codegenPrintPtr(context: Context, call: Call) !void {
+    const argument = call.argument_entities[0];
+    const pointer_index = context.entities.pointer_index.get(argument).?;
+    assert(context.entities.pointers.items[pointer_index] == U8);
+    // const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(argument).?];
+    // const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
+    // defer context.allocator.free(buffer);
+    // const null_terminated_string = try internString(context.entities, buffer);
+    // try context.x86.bytes.insert(null_terminated_string);
+    // const format_string = try internString(context.entities, "\"%s\", 10, 0");
+    // try context.x86.bytes.insert(format_string);
+    // try opRegByte(context, .Mov, .Rsi, null_terminated_string);
+    // try opRegByte(context, .Mov, .Rdi, format_string);
+    // try opRegReg(context, .Xor, .Rax, .Rax);
+    // const align_offset = try alignStackTo16Bytes(context);
+    // const printf = try internString(context.entities, "_printf");
+    // try context.x86.externs.insert(printf);
+    // try opLiteral(context, .Call, printf);
+    // try restoreStack(context, align_offset);
+    // context.stack.top += 8;
+    // const result_offset = context.stack.top;
+    // try context.stack.entity.putNoClobber(call.result_entity, result_offset);
+    // const eight = try internInt(context, 8);
+    // try opRegLiteral(context, .Sub, .Rsp, eight);
+    // try opStackReg(context, .Mov, result_offset, .Rax);
+    // try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
 fn codegenPrint(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 1);
     const argument = call.argument_entities[0];
@@ -357,6 +385,7 @@ fn codegenPrint(context: Context, call: Call) !void {
         I32 => try codegenPrintI32(context, call),
         Float, F64 => try codegenPrintF64(context, call),
         Array => try codegenPrintArray(context, call),
+        Ptr => try codegenPrintPtr(context, call),
         else => unreachable,
     }
 }
@@ -637,34 +666,26 @@ fn codegenMmap(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 6);
     const mmap_syscall = try internString(context.entities, "0x20000C5");
     try opRegLiteral(context, .Mov, .Rax, mmap_syscall);
-
     const addr = call.argument_entities[0];
     assert(context.entities.types.get(addr).? == Ptr);
     assert(context.entities.pointers.items[context.entities.pointer_index.get(addr).?] == Void);
     try moveToRegister(context, .Rdi, addr);
-
     const len = call.argument_entities[1];
     assert(context.entities.types.get(len).? == I64 or context.entities.types.get(len).? == Int);
     try moveToRegister(context, .Rsi, len);
-
     const prot = call.argument_entities[2];
     assert(context.entities.types.get(prot).? == I32 or context.entities.types.get(prot).? == Int);
     try moveToRegister(context, .Edx, prot);
-
     const flags = call.argument_entities[3];
     assert(context.entities.types.get(flags).? == I32 or context.entities.types.get(flags).? == Int);
     try moveToRegister(context, .Ecx, flags);
-
     const fd = call.argument_entities[4];
     assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
     try moveToRegister(context, .R8D, fd);
-
     const pos = call.argument_entities[5];
     assert(context.entities.types.get(pos).? == I64 or context.entities.types.get(pos).? == Int);
     try moveToRegister(context, .R9, pos);
-
     try opRegLiteral(context, .Mov, .R10, try internString(context.entities, "0x1002"));
-
     try opNoArgs(context.x86_block, .Syscall);
     context.stack.top += 8;
     const stack_offset = context.stack.top;
@@ -673,6 +694,32 @@ fn codegenMmap(context: Context, call: Call) !void {
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, stack_offset, .Rax);
     try context.entities.types.putNoClobber(call.result_entity, Ptr);
+    const index = try context.entities.pointers.insert(Void);
+    try context.entities.pointer_index.putNoClobber(call.result_entity, index);
+}
+
+fn codegenRead(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 3);
+    const read_syscall = try internString(context.entities, "0x2000003");
+    try opRegLiteral(context, .Mov, .Rax, read_syscall);
+    const fd = call.argument_entities[0];
+    assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
+    try moveToRegister(context, .Edi, fd);
+    const buf = call.argument_entities[1];
+    assert(context.entities.types.get(buf).? == Ptr);
+    assert(context.entities.pointers.items[context.entities.pointer_index.get(buf).?] == Void);
+    try moveToRegister(context, .Rsi, buf);
+    const bytes = call.argument_entities[2];
+    assert(context.entities.types.get(bytes).? == I64 or context.entities.types.get(bytes).? == Int);
+    try moveToRegister(context, .Rdx, bytes);
+    try opNoArgs(context.x86_block, .Syscall);
+    context.stack.top += 8;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
@@ -688,6 +735,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Open) => try codegenOpen(context, call),
         @enumToInt(Builtins.Lseek) => try codegenLseek(context, call),
         @enumToInt(Builtins.Mmap) => try codegenMmap(context, call),
+        @enumToInt(Builtins.Read) => try codegenRead(context, call),
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
@@ -888,6 +936,7 @@ fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
         switch (expression_kind) {
             .Return => {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
+                assert(entities.types.get(ret).? == I64 or entities.types.get(ret).? == Int);
                 if (stack.entity.get(ret)) |offset| {
                     try opRegStack(context, .Mov, .Rdi, offset);
                 } else if (context.entities.literals.get(ret)) |value| {
