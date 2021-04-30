@@ -1491,3 +1491,58 @@ test "read syscall" {
     expectEqualStrings(x86_string.slice(), expected);
     x86_string.deinit();
 }
+
+test "read syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let o-rdonly 0)
+        \\  (let seek-set 0)
+        \\  (let seek-end 2)
+        \\  (let prot-read i32 1)
+        \\  (let prot-write i32 2)
+        \\  (let prot (bit-or prot-read prot-write))
+        \\  (let map-private i32 0)
+        \\  (let map-anonymous i32 1)
+        \\  (let flags (bit-or map-private map-anonymous))
+        \\  (let fd (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" o-rdonly))
+        \\  (let len (lseek fd 0 seek-end))
+        \\  (lseek fd 0 seek-set)
+        \\  (let data (mmap null len prot flags -1 0))
+        \\  (let bytes (read fd data len))
+        \\  (print data))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x2000003
+        \\    mov edi, -1
+        \\    mov rsi, 0
+        \\    mov rdx, 100
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-8], rax
+        \\    mov rdi, qword [rbp-8]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}

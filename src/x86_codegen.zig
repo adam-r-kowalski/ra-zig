@@ -352,29 +352,24 @@ fn codegenPrintArray(context: Context, call: Call) !void {
 fn codegenPrintPtr(context: Context, call: Call) !void {
     const argument = call.argument_entities[0];
     const pointer_index = context.entities.pointer_index.get(argument).?;
-    assert(context.entities.pointers.items[pointer_index] == U8);
-    // const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(argument).?];
-    // const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
-    // defer context.allocator.free(buffer);
-    // const null_terminated_string = try internString(context.entities, buffer);
-    // try context.x86.bytes.insert(null_terminated_string);
-    // const format_string = try internString(context.entities, "\"%s\", 10, 0");
-    // try context.x86.bytes.insert(format_string);
-    // try opRegByte(context, .Mov, .Rsi, null_terminated_string);
-    // try opRegByte(context, .Mov, .Rdi, format_string);
-    // try opRegReg(context, .Xor, .Rax, .Rax);
-    // const align_offset = try alignStackTo16Bytes(context);
-    // const printf = try internString(context.entities, "_printf");
-    // try context.x86.externs.insert(printf);
-    // try opLiteral(context, .Call, printf);
-    // try restoreStack(context, align_offset);
-    // context.stack.top += 8;
-    // const result_offset = context.stack.top;
-    // try context.stack.entity.putNoClobber(call.result_entity, result_offset);
-    // const eight = try internInt(context, 8);
-    // try opRegLiteral(context, .Sub, .Rsp, eight);
-    // try opStackReg(context, .Mov, result_offset, .Rax);
-    // try context.entities.types.putNoClobber(call.result_entity, I64);
+    assert(context.entities.pointers.items[pointer_index] == Void);
+    const format_string = try internString(context.entities, "\"%s\", 10, 0");
+    try context.x86.bytes.insert(format_string);
+    try opRegByte(context, .Mov, .Rdi, format_string);
+    try moveToRegister(context, .Rsi, argument);
+    try opRegReg(context, .Xor, .Rax, .Rax);
+    const align_offset = try alignStackTo16Bytes(context);
+    const printf = try internString(context.entities, "_printf");
+    try context.x86.externs.insert(printf);
+    try opLiteral(context, .Call, printf);
+    try restoreStack(context, align_offset);
+    context.stack.top += 8;
+    const result_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, result_offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, result_offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
 fn codegenPrint(context: Context, call: Call) !void {
