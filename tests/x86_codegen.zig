@@ -1492,3 +1492,84 @@ test "read syscall" {
     expectEqualStrings(x86_string.slice(), expected);
     x86_string.deinit();
 }
+
+test "close syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (close -1)
+        \\  0)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x2000006
+        \\    mov edi, -1
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}
+
+test "munmap syscall" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (munmap null 0)
+        \\  0)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x2000049
+        \\    mov rdi, 0
+        \\    mov rsi, 0
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov rdi, 0
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}

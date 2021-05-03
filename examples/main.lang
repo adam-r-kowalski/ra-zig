@@ -14,4 +14,6 @@
   (lseek fd 0 seek-set)
   (let data (mmap null len prot flags -1 0))
   (let bytes (read fd data len))
-  (print data))
+  (close fd)
+  (print data)
+  (munmap data len))

@@ -47,8 +47,10 @@ pub const Builtins = enum(Entity) {
     Bit_Or,
     Print,
     Open,
+    Close,
     Lseek,
     Mmap,
+    Munmap,
     Read,
 };
 

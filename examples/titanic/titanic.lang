@@ -7,7 +7,7 @@
       (dec! times)
       (when (zero? times) (return buffer)))))
 
-(let blk (struct :fields ((data (ptr u8)) (len u64))))
+(let blk (struct :ptr (ptr u8) :len u64))
 
 (fn readfile :args ((filename (ptr u8))) :ret blk
   :body
@@ -20,7 +20,7 @@
   (read fd data len)
   (close fd)
   (blk data len))
-
+  
 (fn classify :args ((buffer (ptr u8))) :ret f32
   :body
   (var correct 0.0)
@@ -40,6 +40,7 @@
 (fn start :args () :ret i64
   :body
   (let contents (readfile "train.csv"))
-  (let accuracy (classify (ptr contents)))
+  (let accuracy (classify (:ptr contents)))
   (printf "accuracy %f\n" accuracy)
-  (munmap (data contents) (len contents)))
+  (munmap (:ptr contents) (:len contents)))
+

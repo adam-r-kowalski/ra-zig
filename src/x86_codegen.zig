@@ -693,6 +693,27 @@ fn codegenMmap(context: Context, call: Call) !void {
     try context.entities.pointer_index.putNoClobber(call.result_entity, index);
 }
 
+fn codegenMunmap(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const munmap_syscall = try internString(context.entities, "0x2000049");
+    try opRegLiteral(context, .Mov, .Rax, munmap_syscall);
+    const addr = call.argument_entities[0];
+    assert(context.entities.types.get(addr).? == Ptr);
+    assert(context.entities.pointers.items[context.entities.pointer_index.get(addr).?] == Void);
+    try moveToRegister(context, .Rdi, addr);
+    const len = call.argument_entities[1];
+    assert(context.entities.types.get(len).? == I64 or context.entities.types.get(len).? == Int);
+    try moveToRegister(context, .Rsi, len);
+    try opNoArgs(context.x86_block, .Syscall);
+    context.stack.top += 4;
+    const stack_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, stack_offset);
+    const four = try internInt(context, 4);
+    try opRegLiteral(context, .Sub, .Rsp, four);
+    try opStackReg(context, .Mov, stack_offset, .Eax);
+    try context.entities.types.putNoClobber(call.result_entity, Int);
+}
+
 fn codegenRead(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 3);
     const read_syscall = try internString(context.entities, "0x2000003");
@@ -717,6 +738,23 @@ fn codegenRead(context: Context, call: Call) !void {
     try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
+fn codegenClose(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 1);
+    const close_syscall = try internString(context.entities, "0x2000006");
+    try opRegLiteral(context, .Mov, .Rax, close_syscall);
+    const fd = call.argument_entities[0];
+    assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
+    try moveToRegister(context, .Edi, fd);
+    try opNoArgs(context.x86_block, .Syscall);
+    context.stack.top += 4;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const four = try internInt(context, 4);
+    try opRegLiteral(context, .Sub, .Rsp, four);
+    try opStackReg(context, .Mov, offset, .Eax);
+    try context.entities.types.putNoClobber(call.result_entity, I32);
+}
+
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
     const name = context.entities.names.get(call.function_entity).?;
@@ -728,8 +766,10 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Bit_Or) => try codegenBitOr(context, call),
         @enumToInt(Builtins.Print) => try codegenPrint(context, call),
         @enumToInt(Builtins.Open) => try codegenOpen(context, call),
+        @enumToInt(Builtins.Close) => try codegenClose(context, call),
         @enumToInt(Builtins.Lseek) => try codegenLseek(context, call),
         @enumToInt(Builtins.Mmap) => try codegenMmap(context, call),
+        @enumToInt(Builtins.Munmap) => try codegenMunmap(context, call),
         @enumToInt(Builtins.Read) => try codegenRead(context, call),
         else => {
             const index = context.ir.name_to_index.get(name).?;
