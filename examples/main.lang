@@ -12,7 +12,7 @@
   (let map-private i32 0)
   (let map-anonymous i32 1)
   (let flags (bit-or map-private map-anonymous))
-  (let data (mmap null len prot flags -1 0))
+  (let data (ptr u8) (mmap null len prot flags -1 0))
   (let bytes (read fd data len))
   (close fd)
   (print data)

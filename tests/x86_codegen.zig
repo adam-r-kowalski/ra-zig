@@ -1404,7 +1404,7 @@ test "mmap syscall" {
         \\  (let prot (bit-or prot-read prot-write))
         \\  (let flags (bit-or map-private map-anonymous))
         \\  (let len 4096)
-        \\  (let data (mmap null len prot flags -1 0))
+        \\  (let data (ptr u8) (mmap null len prot flags -1 0))
         \\  0)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
