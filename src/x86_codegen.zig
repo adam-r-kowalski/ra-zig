@@ -794,6 +794,46 @@ fn codegenTypedLet(context: Context, typed_let_index: usize) !void {
     }
 }
 
+fn codegenCopyingLet(context: Context, copying_let_index: usize) !void {
+    const copying_let = context.ir_block.copying_lets.items[context.ir_block.indices.items[copying_let_index]];
+    const type_of = context.entities.types.get(copying_let.source_entity).?;
+    try context.entities.types.putNoClobber(copying_let.destination_entity, type_of);
+    const literal = context.entities.literals.get(copying_let.source_entity).?;
+    try context.entities.literals.putNoClobber(copying_let.destination_entity, literal);
+}
+
+fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !void {
+    const copying_typed_let = context.ir_block.copying_typed_lets.items[context.ir_block.indices.items[copying_typed_let_index]];
+    const type_of = context.entities.types.get(copying_typed_let.source_entity).?;
+    switch (type_of) {
+        Int => {
+            switch (copying_typed_let.type_entity) {
+                Int, I64, I32 => try context.entities.types.put(copying_typed_let.destination_entity, copying_typed_let.type_entity),
+                else => unreachable,
+            }
+        },
+        Float => {
+            switch (copying_typed_let.type_entity) {
+                Float, F64 => try context.entities.types.put(copying_typed_let.destination_entity, copying_typed_let.type_entity),
+                else => unreachable,
+            }
+        },
+        Ptr => {
+            assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
+            const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
+            const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
+            assert(context.entities.types.get(type_entity_element_type).? == Type);
+            const pointer_index = context.entities.pointer_index.get(copying_typed_let.destination_entity).?;
+            const element_type = context.entities.pointers.items[pointer_index];
+            assert(type_entity_element_type == element_type or element_type == Void);
+            context.entities.pointers.items[pointer_index] = type_entity_element_type;
+        },
+        else => assert(type_of == copying_typed_let.type_entity),
+    }
+    const literal = context.entities.literals.get(copying_typed_let.source_entity).?;
+    try context.entities.literals.putNoClobber(copying_typed_let.destination_entity, literal);
+}
+
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
     const name = context.entities.names.get(call.function_entity).?;
@@ -1025,6 +1065,8 @@ fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
             },
             .Call => try codegenCall(context, i),
             .TypedLet => try codegenTypedLet(context, i),
+            .CopyingLet => try codegenCopyingLet(context, i),
+            .CopyingTypedLet => try codegenCopyingTypedLet(context, i),
             else => unreachable,
         }
     }
