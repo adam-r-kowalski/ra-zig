@@ -62,12 +62,13 @@ fn internInt(context: Context, value: usize) !InternedString {
     return interned;
 }
 
-const RegisterSize = enum(u8) { Dword, Qword };
+const RegisterSize = enum(u8) { Qword, Dword, Byte };
 
 fn registerSize(reg: Register) RegisterSize {
     return switch (reg) {
-        .Eax, .Ebx, .Ecx, .Edx, .Esp, .Ebp, .Esi, .Edi, .R8D, .R9D, .R10D, .R11D, .R12D, .R13D, .R14D, .R15D => .Dword,
         .Rax, .Rbx, .Rcx, .Rdx, .Rsp, .Rbp, .Rsi, .Rdi, .R8, .R9, .R10, .R11, .R12, .R13, .R14, .R15 => .Qword,
+        .Eax, .Ebx, .Ecx, .Edx, .Esp, .Ebp, .Esi, .Edi, .R8d, .R9d, .R10d, .R11d, .R12d, .R13d, .R14d, .R15d => .Dword,
+        .Al, .Ah, .Bl, .Bh, .Cl, .Ch, .Dl, .Dh, .Spl, .Bpl, .Sil, .Dil, .R8b, .R9b, .R10b, .R11b, .R12b, .R13b, .R14b, .R15b => .Byte,
     };
 }
 
@@ -144,8 +145,9 @@ fn opRegStack(context: Context, op: Instruction, reg: Register, offset: usize) !
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
     switch (registerSize(reg)) {
-        .Dword => operand_kinds[1] = .StackOffsetDword,
         .Qword => operand_kinds[1] = .StackOffsetQword,
+        .Dword => operand_kinds[1] = .StackOffsetDword,
+        .Byte => operand_kinds[1] = .StackOffsetByte,
     }
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
@@ -170,8 +172,9 @@ fn opStackReg(context: Context, op: Instruction, offset: usize, reg: Register) !
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     switch (registerSize(reg)) {
-        .Dword => operand_kinds[0] = .StackOffsetDword,
         .Qword => operand_kinds[0] = .StackOffsetQword,
+        .Dword => operand_kinds[0] = .StackOffsetDword,
+        .Byte => operand_kinds[0] = .StackOffsetByte,
     }
     operand_kinds[1] = .Register;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
@@ -243,6 +246,19 @@ fn opRegByte(context: Context, op: Instruction, to: Register, byte: usize) !void
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opRegBytePointer(context: Context, op: Instruction, to: Register, from: Register) !void {
+    assert(registerSize(to) == .Byte);
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .BytePointer;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = @enumToInt(to);
+    operands[1] = @enumToInt(from);
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn alignStackTo16Bytes(context: Context) !usize {
     const value = context.stack.top % 16;
     if (value == 0) return value;
@@ -283,6 +299,26 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 fn codegenPrintI32(context: Context, call: Call) !void {
     try moveToRegister(context, .Esi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%d\", 10, 0");
+    try context.x86.bytes.insert(format_string);
+    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegReg(context, .Xor, .Rax, .Rax);
+    const align_offset = try alignStackTo16Bytes(context);
+    const printf = try internString(context.entities, "_printf");
+    try context.x86.externs.insert(printf);
+    try opLiteral(context, .Call, printf);
+    try restoreStack(context, align_offset);
+    context.stack.top += 8;
+    const result_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, result_offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, result_offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
+fn codegenPrintU8(context: Context, call: Call) !void {
+    try moveToRegister(context, .Sil, call.argument_entities[0]);
+    const format_string = try internString(context.entities, "\"%c\", 10, 0");
     try context.x86.bytes.insert(format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
@@ -349,9 +385,9 @@ fn codegenPrintArray(context: Context, call: Call) !void {
     try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
-fn codegenPrintPtr(context: Context, call: Call) !void {
+fn codegenPrintPtr(context: Context, call: Call, type_of: Entity) !void {
     const argument = call.argument_entities[0];
-    const pointer_index = context.entities.pointer_index.get(argument).?;
+    const pointer_index = context.entities.pointer_index.get(type_of).?;
     assert(context.entities.pointers.items[pointer_index] == U8);
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
     try context.x86.bytes.insert(format_string);
@@ -375,13 +411,19 @@ fn codegenPrintPtr(context: Context, call: Call) !void {
 fn codegenPrint(context: Context, call: Call) !void {
     assert(call.argument_entities.len == 1);
     const argument = call.argument_entities[0];
-    switch (context.entities.types.get(argument).?) {
+    const type_of = context.entities.types.get(argument).?;
+    switch (type_of) {
         Int, I64 => try codegenPrintI64(context, call),
         I32 => try codegenPrintI32(context, call),
+        U8 => try codegenPrintU8(context, call),
         Float, F64 => try codegenPrintF64(context, call),
         Array => try codegenPrintArray(context, call),
-        Ptr => try codegenPrintPtr(context, call),
-        else => unreachable,
+        else => {
+            switch (context.entities.values.get(type_of).?) {
+                Ptr => try codegenPrintPtr(context, call, type_of),
+                else => unreachable,
+            }
+        },
     }
 }
 
@@ -676,7 +718,7 @@ fn codegenMmap(context: Context, call: Call) !void {
     try moveToRegister(context, .Ecx, flags);
     const fd = call.argument_entities[4];
     assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
-    try moveToRegister(context, .R8D, fd);
+    try moveToRegister(context, .R8d, fd);
     const pos = call.argument_entities[5];
     assert(context.entities.types.get(pos).? == I64 or context.entities.types.get(pos).? == Int);
     try moveToRegister(context, .R9, pos);
@@ -763,6 +805,26 @@ fn codegenPtr(context: Context, call: Call) !void {
     try context.entities.pointer_index.putNoClobber(call.result_entity, pointer_index);
 }
 
+fn codegenDeref(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 1);
+    const argument = call.argument_entities[0];
+    const type_of = context.entities.types.get(argument).?;
+    assert(context.entities.values.get(type_of).? == Ptr);
+    const pointer_index = context.entities.pointer_index.get(type_of).?;
+    const element_type = context.entities.pointers.items[pointer_index];
+    assert(element_type == U8);
+    context.stack.top += 1;
+    const result_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, result_offset);
+    try context.entities.types.putNoClobber(call.result_entity, element_type);
+    const one = try internInt(context, 1);
+    try opRegLiteral(context, .Sub, .Rsp, one);
+    const argument_offset = context.stack.entity.get(argument).?;
+    try opRegStack(context, .Mov, .Rdi, argument_offset);
+    try opRegBytePointer(context, .Mov, .Sil, .Rdi);
+    try opStackReg(context, .Mov, result_offset, .Sil);
+}
+
 fn codegenTypedLet(context: Context, typed_let_index: usize) !void {
     const typed_let = context.ir_block.typed_lets.items[context.ir_block.indices.items[typed_let_index]];
     assert(context.entities.types.get(typed_let.type_entity).? == Type);
@@ -828,6 +890,29 @@ fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !voi
             assert(type_entity_element_type == element_type or element_type == Void);
             context.entities.pointers.items[pointer_index] = type_entity_element_type;
         },
+        Array => {
+            assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
+            const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
+            const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
+            assert(context.entities.types.get(type_entity_element_type).? == Type);
+            const array_index = context.entities.array_index.get(copying_typed_let.source_entity).?;
+            const element_type = context.entities.arrays.types.items[array_index];
+            assert(type_entity_element_type == element_type);
+            assert(element_type == U8);
+            const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(copying_typed_let.source_entity).?];
+            const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
+            defer context.allocator.free(buffer);
+            const null_terminated_string = try internString(context.entities, buffer);
+            try context.x86.bytes.insert(null_terminated_string);
+            context.stack.top += 8;
+            const result_offset = context.stack.top;
+            try context.stack.entity.putNoClobber(copying_typed_let.destination_entity, result_offset);
+            try context.entities.types.putNoClobber(copying_typed_let.destination_entity, copying_typed_let.type_entity);
+            const eight = try internInt(context, 8);
+            try opRegLiteral(context, .Sub, .Rsp, eight);
+            try opRegByte(context, .Mov, .Rdi, null_terminated_string);
+            try opStackReg(context, .Mov, result_offset, .Rdi);
+        },
         else => assert(type_of == copying_typed_let.type_entity),
     }
     const literal = context.entities.literals.get(copying_typed_let.source_entity).?;
@@ -851,6 +936,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Munmap) => try codegenMunmap(context, call),
         @enumToInt(Builtins.Read) => try codegenRead(context, call),
         @enumToInt(Builtins.Ptr) => try codegenPtr(context, call),
+        @enumToInt(Builtins.Deref) => try codegenDeref(context, call),
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
@@ -1121,36 +1207,56 @@ fn writeRegister(output: *List(u8), register: Register) !void {
     switch (register) {
         .Rax => try output.insertSlice("rax"),
         .Eax => try output.insertSlice("eax"),
+        .Ah => try output.insertSlice("ah"),
+        .Al => try output.insertSlice("al"),
         .Rbx => try output.insertSlice("rbx"),
         .Ebx => try output.insertSlice("ebx"),
+        .Bh => try output.insertSlice("bh"),
+        .Bl => try output.insertSlice("bl"),
         .Rcx => try output.insertSlice("rcx"),
         .Ecx => try output.insertSlice("ecx"),
+        .Ch => try output.insertSlice("ch"),
+        .Cl => try output.insertSlice("cl"),
         .Rdx => try output.insertSlice("rdx"),
         .Edx => try output.insertSlice("edx"),
+        .Dh => try output.insertSlice("dh"),
+        .Dl => try output.insertSlice("dl"),
         .Rbp => try output.insertSlice("rbp"),
         .Ebp => try output.insertSlice("ebp"),
+        .Bpl => try output.insertSlice("bpl"),
         .Rsp => try output.insertSlice("rsp"),
         .Esp => try output.insertSlice("esp"),
+        .Spl => try output.insertSlice("spl"),
         .Rsi => try output.insertSlice("rsi"),
         .Esi => try output.insertSlice("esi"),
+        .Sil => try output.insertSlice("sil"),
         .Rdi => try output.insertSlice("rdi"),
         .Edi => try output.insertSlice("edi"),
+        .Dil => try output.insertSlice("dil"),
         .R8 => try output.insertSlice("r8"),
-        .R8D => try output.insertSlice("r8d"),
+        .R8d => try output.insertSlice("r8d"),
+        .R8b => try output.insertSlice("r8b"),
         .R9 => try output.insertSlice("r9"),
-        .R9D => try output.insertSlice("r9d"),
+        .R9d => try output.insertSlice("r9d"),
+        .R9b => try output.insertSlice("r9b"),
         .R10 => try output.insertSlice("r10"),
-        .R10D => try output.insertSlice("r10d"),
+        .R10d => try output.insertSlice("r10d"),
+        .R10b => try output.insertSlice("r10b"),
         .R11 => try output.insertSlice("r11"),
-        .R11D => try output.insertSlice("r11d"),
+        .R11d => try output.insertSlice("r11d"),
+        .R11b => try output.insertSlice("r11b"),
         .R12 => try output.insertSlice("r12"),
-        .R12D => try output.insertSlice("r12d"),
+        .R12d => try output.insertSlice("r12d"),
+        .R12b => try output.insertSlice("r12b"),
         .R13 => try output.insertSlice("r13"),
-        .R13D => try output.insertSlice("r13d"),
+        .R13d => try output.insertSlice("r13d"),
+        .R13b => try output.insertSlice("r13b"),
         .R14 => try output.insertSlice("r14"),
-        .R14D => try output.insertSlice("r14d"),
+        .R14d => try output.insertSlice("r14d"),
+        .R14b => try output.insertSlice("r14b"),
         .R15 => try output.insertSlice("r15"),
-        .R15D => try output.insertSlice("r15d"),
+        .R15d => try output.insertSlice("r15d"),
+        .R15b => try output.insertSlice("r15b"),
     }
 }
 
@@ -1227,8 +1333,14 @@ pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) 
                     .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
                     .QuadWord => try output.insertFormatted("quad_word{}", .{operands[k]}),
                     .RelativeQword => try output.insertFormatted("[rel quad_word{}]", .{operands[k]}),
-                    .StackOffsetDword => try output.insertFormatted("dword [rbp-{}]", .{operands[k]}),
                     .StackOffsetQword => try output.insertFormatted("qword [rbp-{}]", .{operands[k]}),
+                    .StackOffsetDword => try output.insertFormatted("dword [rbp-{}]", .{operands[k]}),
+                    .StackOffsetByte => try output.insertFormatted("byte [rbp-{}]", .{operands[k]}),
+                    .BytePointer => {
+                        try output.insertSlice("byte [");
+                        try writeRegister(&output, @intToEnum(Register, operands[k]));
+                        _ = try output.insert(']');
+                    },
                 }
             }
         }

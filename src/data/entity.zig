@@ -52,6 +52,7 @@ pub const Builtins = enum(Entity) {
     Mmap,
     Munmap,
     Read,
+    Deref,
 };
 
 pub const names = blk: {
