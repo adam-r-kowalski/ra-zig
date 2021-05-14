@@ -126,7 +126,7 @@ pub const Block = struct {
     operands: List([]const usize),
 };
 
-pub const Bytes = struct {
+pub const UniqueIds = struct {
     string_to_index: Map(InternedString, usize),
     index_to_string: List(InternedString),
     next_index: usize,
@@ -135,8 +135,8 @@ pub const Bytes = struct {
 pub const X86 = struct {
     blocks: List(Block),
     externs: Set(InternedString),
-    bytes: Bytes,
-    quad_words: Set(InternedString),
+    bytes: UniqueIds,
+    quad_words: UniqueIds,
     arena: *Arena,
 
     pub fn deinit(self: *@This()) void {
