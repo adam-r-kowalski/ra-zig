@@ -426,7 +426,7 @@ test "print a signed integer" {
         \\
         \\    section .data
         \\
-        \\byte32: db "%ld", 10, 0
+        \\byte0: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -434,7 +434,7 @@ test "print a signed integer" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 12345
-        \\    mov rdi, byte32
+        \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -475,7 +475,7 @@ test "print three signed integers" {
         \\
         \\    section .data
         \\
-        \\byte36: db "%ld", 10, 0
+        \\byte0: db "%ld", 10, 0
         \\
         \\    section .text
         \\
@@ -483,13 +483,13 @@ test "print three signed integers" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 10
-        \\    mov rdi, byte36
+        \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
         \\    mov rsi, 20
-        \\    mov rdi, byte36
+        \\    mov rdi, byte0
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
@@ -497,7 +497,7 @@ test "print three signed integers" {
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
         \\    mov rsi, 30
-        \\    mov rdi, byte36
+        \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
         \\    sub rsp, 8
@@ -1696,7 +1696,7 @@ test "pointer decay" {
         \\
         \\    section .data
         \\
-        \\byte37: db "text", 0
+        \\byte0: db "text", 0
         \\
         \\    section .text
         \\
@@ -1704,7 +1704,7 @@ test "pointer decay" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    sub rsp, 8
-        \\    mov rdi, byte37
+        \\    mov rdi, byte0
         \\    mov qword [rbp-8], rdi
         \\    sub rsp, 1
         \\    mov rdi, qword [rbp-8]

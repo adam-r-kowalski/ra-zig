@@ -126,10 +126,16 @@ pub const Block = struct {
     operands: List([]const usize),
 };
 
+pub const Bytes = struct {
+    string_to_index: Map(InternedString, usize),
+    index_to_string: List(InternedString),
+    next_index: usize,
+};
+
 pub const X86 = struct {
     blocks: List(Block),
     externs: Set(InternedString),
-    bytes: Set(InternedString),
+    bytes: Bytes,
     quad_words: Set(InternedString),
     arena: *Arena,
 

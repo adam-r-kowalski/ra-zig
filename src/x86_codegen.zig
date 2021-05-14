@@ -22,6 +22,7 @@ const Register = data.x86.Register;
 const SseRegister = data.x86.SseRegister;
 const Kind = data.x86.Kind;
 const BlockIndex = data.x86.BlockIndex;
+const Bytes = data.x86.Bytes;
 const List = data.List;
 const Map = data.Map;
 const Set = data.Set;
@@ -60,6 +61,22 @@ fn internInt(context: Context, value: usize) !InternedString {
     const interned = try internString(context.entities, buffer);
     try context.interned_ints.putNoClobber(value, interned);
     return interned;
+}
+
+fn initBytes(allocator: *Allocator) Bytes {
+    return Bytes{
+        .string_to_index = Map(InternedString, usize).init(allocator),
+        .index_to_string = List(InternedString).init(allocator),
+        .next_index = 0,
+    };
+}
+
+fn insertByte(bytes: *Bytes, interned_string: InternedString) !void {
+    const result = try bytes.string_to_index.getOrPut(interned_string);
+    if (result.found_existing) return;
+    result.entry.value = bytes.next_index;
+    _ = try bytes.index_to_string.insert(interned_string);
+    bytes.next_index += 1;
 }
 
 const RegisterSize = enum(u8) { Qword, Dword, Byte };
@@ -279,7 +296,7 @@ fn restoreStack(context: Context, offset: usize) !void {
 fn codegenPrintI64(context: Context, call: Call) !void {
     try moveToRegister(context, .Rsi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%ld\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
@@ -299,7 +316,7 @@ fn codegenPrintI64(context: Context, call: Call) !void {
 fn codegenPrintI32(context: Context, call: Call) !void {
     try moveToRegister(context, .Esi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%d\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
@@ -319,7 +336,7 @@ fn codegenPrintI32(context: Context, call: Call) !void {
 fn codegenPrintU8(context: Context, call: Call) !void {
     try moveToRegister(context, .Sil, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%c\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
@@ -339,7 +356,7 @@ fn codegenPrintU8(context: Context, call: Call) !void {
 fn codegenPrintF64(context: Context, call: Call) !void {
     try moveToSseRegister(context, .Xmm0, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%f\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     const one = try internInt(context, 1);
     try opRegLiteral(context, .Mov, .Rax, one);
@@ -365,9 +382,9 @@ fn codegenPrintArray(context: Context, call: Call) !void {
     const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
     defer context.allocator.free(buffer);
     const null_terminated_string = try internString(context.entities, buffer);
-    try context.x86.bytes.insert(null_terminated_string);
+    try insertByte(&context.x86.bytes, null_terminated_string);
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rsi, null_terminated_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
@@ -390,7 +407,7 @@ fn codegenPrintPtr(context: Context, call: Call, type_of: Entity) !void {
     const pointer_index = context.entities.pointer_index.get(type_of).?;
     assert(context.entities.pointers.items[pointer_index] == U8);
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
-    try context.x86.bytes.insert(format_string);
+    try insertByte(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
     try moveToRegister(context, .Rsi, argument);
     try opRegReg(context, .Xor, .Rax, .Rax);
@@ -660,7 +677,7 @@ fn codegenOpen(context: Context, call: Call) !void {
     const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
     defer context.allocator.free(buffer);
     const null_terminated_string = try internString(context.entities, buffer);
-    try context.x86.bytes.insert(null_terminated_string);
+    try insertByte(&context.x86.bytes, null_terminated_string);
     try opRegByte(context, .Mov, .Rdi, null_terminated_string);
     const oflag = call.argument_entities[1];
     assert(context.entities.types.get(oflag).? == I32 or context.entities.types.get(oflag).? == Int);
@@ -903,7 +920,7 @@ fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !voi
             const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
             defer context.allocator.free(buffer);
             const null_terminated_string = try internString(context.entities, buffer);
-            try context.x86.bytes.insert(null_terminated_string);
+            try insertByte(&context.x86.bytes, null_terminated_string);
             context.stack.top += 8;
             const result_offset = context.stack.top;
             try context.stack.entity.putNoClobber(copying_typed_let.destination_entity, result_offset);
@@ -1164,7 +1181,7 @@ pub fn codegen(allocator: *Allocator, entities: *Entities, ir: Ir) !X86 {
     var x86 = X86{
         .arena = arena,
         .externs = Set(InternedString).init(&arena.allocator),
-        .bytes = Set(InternedString).init(&arena.allocator),
+        .bytes = initBytes(&arena.allocator),
         .quad_words = Set(InternedString).init(&arena.allocator),
         .blocks = List(X86Block).init(&arena.allocator),
     };
@@ -1291,13 +1308,14 @@ pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) 
         try output.insertSlice(entities.interned_strings.data.items[entry.key]);
         _ = try output.insert('\n');
     }
-    if ((x86.bytes.count() + x86.quad_words.count()) > 0) {
+    if ((x86.bytes.next_index + x86.quad_words.count()) > 0) {
         try output.insertSlice("\n    section .data\n\n");
     }
-    var byte_iterator = x86.bytes.iterator();
-    while (byte_iterator.next()) |entry| {
-        try output.insertFormatted("byte{}: db ", .{entry.key});
-        try output.insertSlice(entities.interned_strings.data.items[entry.key]);
+    var current_byte: usize = 0;
+    while (current_byte < x86.bytes.next_index) : (current_byte += 1) {
+        try output.insertFormatted("byte{}: db ", .{current_byte});
+        const interned_string = x86.bytes.index_to_string.items[current_byte];
+        try output.insertSlice(entities.interned_strings.data.items[interned_string]);
         _ = try output.insert('\n');
     }
     var quad_word_iterator = x86.quad_words.iterator();
@@ -1330,7 +1348,7 @@ pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) 
                     .SseRegister => try writeSseRegister(&output, @intToEnum(SseRegister, operands[k])),
                     .Label => try writeLabel(&output, operands[k]),
                     .Literal => try output.insertSlice(entities.interned_strings.data.items[operands[k]]),
-                    .Byte => try output.insertFormatted("byte{}", .{operands[k]}),
+                    .Byte => try output.insertFormatted("byte{}", .{x86.bytes.string_to_index.get(operands[k]).?}),
                     .QuadWord => try output.insertFormatted("quad_word{}", .{operands[k]}),
                     .RelativeQword => try output.insertFormatted("[rel quad_word{}]", .{operands[k]}),
                     .StackOffsetQword => try output.insertFormatted("qword [rbp-{}]", .{operands[k]}),

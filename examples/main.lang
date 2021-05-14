@@ -1,8 +1,8 @@
 (fn start :args () :ret i64
   :body
   (let a "text")
-  (let p (ptr u8) a)
-  (let c (deref p))
+  (let b (ptr u8) a)
+  (let c (deref b))
   (print c)
   0)
 
