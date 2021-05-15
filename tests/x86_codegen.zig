@@ -1718,63 +1718,124 @@ test "pointer decay" {
     x86_string.deinit();
 }
 
-// test "full example" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn start :args () :ret i64
-//         \\  :body
-//         \\  (let o-rdonly 0)
-//         \\  (let fd (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" o-rdonly))
-//         \\  (let seek-end 2)
-//         \\  (let len (lseek fd 0 seek-end))
-//         \\  (let seek-set 0)
-//         \\  (lseek fd 0 seek-set)
-//         \\  (let prot-read i32 1)
-//         \\  (let prot-write i32 2)
-//         \\  (let prot (bit-or prot-read prot-write))
-//         \\  (let map-private i32 0)
-//         \\  (let map-anonymous i32 1)
-//         \\  (let flags (bit-or map-private map-anonymous))
-//         \\  (let data (ptr u8) (mmap null len prot flags -1 0))
-//         \\  (let bytes (read fd data len))
-//         \\  (close fd)
-//         \\  (print data)
-//         \\  (munmap data len))
-//     ;
-//     var entities = try lang.data.Entities.init(&gpa.allocator);
-//     var ast = try lang.parse(allocator, &entities, source);
-//     var ir = try lang.lower(allocator, &entities, ast);
-//     ast.deinit();
-//     var x86 = try lang.codegen(allocator, &entities, ir);
-//     ir.deinit();
-//     var x86_string = try lang.x86String(allocator, x86, entities);
-//     entities.deinit();
-//     x86.deinit();
-//     const expected =
-//         \\    global _main
-//         \\
-//         \\    section .data
-//         \\
-//         \\byte37: db "text", 0
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    push rbp
-//         \\    mov rbp, rsp
-//         \\    sub rsp, 8
-//         \\    mov rdi, byte37
-//         \\    mov qword [rbp-8], rdi
-//         \\    sub rsp, 1
-//         \\    mov rdi, qword [rbp-8]
-//         \\    mov sil, byte [rdi]
-//         \\    mov byte [rbp-9], sil
-//         \\    mov rdi, 0
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     ;
-//     expectEqualStrings(x86_string.slice(), expected);
-//     x86_string.deinit();
-// }
+test "read file contents to buffer" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let o-rdonly 0)
+        \\  (let fd (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" o-rdonly))
+        \\  (let seek-end 2)
+        \\  (let len (lseek fd 0 seek-end))
+        \\  (let seek-set 0)
+        \\  (lseek fd 0 seek-set)
+        \\  (let prot-read i32 1)
+        \\  (let prot-write i32 2)
+        \\  (let prot (bit-or prot-read prot-write))
+        \\  (let map-private i32 0)
+        \\  (let map-anonymous i32 1)
+        \\  (let flags (bit-or map-private map-anonymous))
+        \\  (let data (ptr u8) (mmap null len prot flags -1 0))
+        \\  (let bytes (read fd data len))
+        \\  (close fd)
+        \\  (print data)
+        \\  (munmap data len))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte0: db "/Users/adamkowalski/code/lang/examples/titanic/train.csv", 0
+        \\byte1: db "%s", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 0x2000005
+        \\    mov rdi, byte0
+        \\    mov esi, 0
+        \\    xor rdx, rdx
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov rax, 0x20000C7
+        \\    mov edi, dword [rbp-4]
+        \\    mov rsi, 0
+        \\    mov edx, 2
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-12], rax
+        \\    mov rax, 0x20000C7
+        \\    mov edi, dword [rbp-4]
+        \\    mov rsi, 0
+        \\    mov edx, 0
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-20], rax
+        \\    mov eax, 1
+        \\    mov ecx, 2
+        \\    or eax, ecx
+        \\    sub rsp, 4
+        \\    mov dword [rbp-24], eax
+        \\    mov eax, 0
+        \\    mov ecx, 1
+        \\    or eax, ecx
+        \\    sub rsp, 4
+        \\    mov dword [rbp-28], eax
+        \\    mov rax, 0x20000C5
+        \\    mov rdi, 0
+        \\    mov rsi, qword [rbp-12]
+        \\    mov edx, dword [rbp-24]
+        \\    mov ecx, dword [rbp-28]
+        \\    mov r8d, -1
+        \\    mov r9, 0
+        \\    mov r10, 0x1002
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-36], rax
+        \\    mov rax, 0x2000003
+        \\    mov edi, dword [rbp-4]
+        \\    mov rsi, qword [rbp-36]
+        \\    mov rdx, qword [rbp-12]
+        \\    syscall
+        \\    sub rsp, 8
+        \\    mov qword [rbp-44], rax
+        \\    mov rax, 0x2000006
+        \\    mov edi, dword [rbp-4]
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-48], eax
+        \\    mov rdi, byte1
+        \\    mov rsi, qword [rbp-36]
+        \\    xor rax, rax
+        \\    call _printf
+        \\    sub rsp, 8
+        \\    mov qword [rbp-56], rax
+        \\    mov rax, 0x2000049
+        \\    mov rdi, qword [rbp-36]
+        \\    mov rsi, qword [rbp-12]
+        \\    syscall
+        \\    sub rsp, 4
+        \\    mov dword [rbp-60], eax
+        \\    mov rdi, qword [rbp-60]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}

@@ -75,11 +75,15 @@ fn lowerString(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     const entity = entities.next_entity;
     entities.next_entity += 1;
+    const type_of = entities.next_entity;
+    entities.next_entity += 1;
     try entities.literals.putNoClobber(entity, string);
-    try entities.types.putNoClobber(entity, @enumToInt(Builtins.Array));
+    try entities.types.putNoClobber(entity, type_of);
+    try entities.types.putNoClobber(type_of, @enumToInt(Builtins.Type));
+    try entities.values.putNoClobber(type_of, @enumToInt(Builtins.Array));
     const array_index = try entities.arrays.types.insert(@enumToInt(Builtins.U8));
     _ = try entities.arrays.lengths.insert(entities.interned_strings.data.items[string].len);
-    try entities.array_index.putNoClobber(entity, array_index);
+    try entities.array_index.putNoClobber(type_of, array_index);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
 }

@@ -374,9 +374,9 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     try context.entities.types.putNoClobber(call.result_entity, I64);
 }
 
-fn codegenPrintArray(context: Context, call: Call) !void {
+fn codegenPrintArray(context: Context, call: Call, type_of: Entity) !void {
     const argument = call.argument_entities[0];
-    const array_index = context.entities.array_index.get(argument).?;
+    const array_index = context.entities.array_index.get(type_of).?;
     assert(context.entities.arrays.types.items[array_index] == U8);
     const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(argument).?];
     const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
@@ -434,9 +434,9 @@ fn codegenPrint(context: Context, call: Call) !void {
         I32 => try codegenPrintI32(context, call),
         U8 => try codegenPrintU8(context, call),
         Float, F64 => try codegenPrintF64(context, call),
-        Array => try codegenPrintArray(context, call),
         else => {
             switch (context.entities.values.get(type_of).?) {
+                Array => try codegenPrintArray(context, call, type_of),
                 Ptr => try codegenPrintPtr(context, call, type_of),
                 else => unreachable,
             }
@@ -670,8 +670,9 @@ fn codegenOpen(context: Context, call: Call) !void {
     const open_syscall = try internString(context.entities, "0x2000005");
     try opRegLiteral(context, .Mov, .Rax, open_syscall);
     const path = call.argument_entities[0];
-    assert(context.entities.types.get(path).? == Array);
-    const array_index = context.entities.array_index.get(path).?;
+    const type_of = context.entities.types.get(path).?;
+    assert(context.entities.values.get(type_of).? == Array);
+    const array_index = context.entities.array_index.get(type_of).?;
     assert(context.entities.arrays.types.items[array_index] == U8);
     const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(path).?];
     const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
@@ -721,8 +722,9 @@ fn codegenMmap(context: Context, call: Call) !void {
     const mmap_syscall = try internString(context.entities, "0x20000C5");
     try opRegLiteral(context, .Mov, .Rax, mmap_syscall);
     const addr = call.argument_entities[0];
-    assert(context.entities.types.get(addr).? == Ptr);
-    assert(context.entities.pointers.items[context.entities.pointer_index.get(addr).?] == Void);
+    const addr_type = context.entities.types.get(addr).?;
+    assert(context.entities.values.get(addr_type).? == Ptr);
+    assert(context.entities.pointers.items[context.entities.pointer_index.get(addr_type).?] == Void);
     try moveToRegister(context, .Rdi, addr);
     const len = call.argument_entities[1];
     assert(context.entities.types.get(len).? == I64 or context.entities.types.get(len).? == Int);
@@ -747,9 +749,13 @@ fn codegenMmap(context: Context, call: Call) !void {
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, stack_offset, .Rax);
-    try context.entities.types.putNoClobber(call.result_entity, Ptr);
+    const type_of = context.entities.next_entity;
+    context.entities.next_entity += 1;
+    try context.entities.types.putNoClobber(call.result_entity, type_of);
+    try context.entities.values.putNoClobber(type_of, Ptr);
     const index = try context.entities.pointers.insert(Void);
-    try context.entities.pointer_index.putNoClobber(call.result_entity, index);
+    try context.entities.pointer_index.putNoClobber(type_of, index);
+    try context.entities.types.putNoClobber(type_of, Type);
 }
 
 fn codegenMunmap(context: Context, call: Call) !void {
@@ -757,7 +763,8 @@ fn codegenMunmap(context: Context, call: Call) !void {
     const munmap_syscall = try internString(context.entities, "0x2000049");
     try opRegLiteral(context, .Mov, .Rax, munmap_syscall);
     const addr = call.argument_entities[0];
-    assert(context.entities.types.get(addr).? == Ptr);
+    const type_of = context.entities.types.get(addr).?;
+    assert(context.entities.values.get(type_of).? == Ptr);
     try moveToRegister(context, .Rdi, addr);
     const len = call.argument_entities[1];
     assert(context.entities.types.get(len).? == I64 or context.entities.types.get(len).? == Int);
@@ -780,7 +787,8 @@ fn codegenRead(context: Context, call: Call) !void {
     assert(context.entities.types.get(fd).? == I32 or context.entities.types.get(fd).? == Int);
     try moveToRegister(context, .Edi, fd);
     const buf = call.argument_entities[1];
-    assert(context.entities.types.get(buf).? == Ptr);
+    const buf_type = context.entities.types.get(buf).?;
+    assert(context.entities.values.get(buf_type).? == Ptr);
     try moveToRegister(context, .Rsi, buf);
     const bytes = call.argument_entities[2];
     assert(context.entities.types.get(bytes).? == I64 or context.entities.types.get(bytes).? == Int);
@@ -859,17 +867,24 @@ fn codegenTypedLet(context: Context, typed_let_index: usize) !void {
                 else => unreachable,
             }
         },
-        Ptr => {
-            assert(context.entities.values.get(typed_let.type_entity).? == Ptr);
-            const type_entity_pointer_index = context.entities.pointer_index.get(typed_let.type_entity).?;
-            const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
-            assert(context.entities.types.get(type_entity_element_type).? == Type);
-            const pointer_index = context.entities.pointer_index.get(typed_let.entity).?;
-            const element_type = context.entities.pointers.items[pointer_index];
-            assert(type_entity_element_type == element_type or element_type == Void);
-            context.entities.pointers.items[pointer_index] = type_entity_element_type;
+        else => {
+            if (context.entities.values.get(type_of)) |value| {
+                switch (value) {
+                    Ptr => {
+                        const type_entity_pointer_index = context.entities.pointer_index.get(typed_let.type_entity).?;
+                        const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
+                        assert(context.entities.types.get(type_entity_element_type).? == Type);
+                        const pointer_index = context.entities.pointer_index.get(type_of).?;
+                        const element_type = context.entities.pointers.items[pointer_index];
+                        assert(type_entity_element_type == element_type or element_type == Void);
+                        context.entities.pointers.items[pointer_index] = type_entity_element_type;
+                    },
+                    else => unreachable,
+                }
+            } else {
+                assert(type_of == typed_let.type_entity);
+            }
         },
-        else => assert(type_of == typed_let.type_entity),
     }
 }
 
@@ -897,40 +912,49 @@ fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !voi
                 else => unreachable,
             }
         },
-        Ptr => {
-            assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
-            const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
-            const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
-            assert(context.entities.types.get(type_entity_element_type).? == Type);
-            const pointer_index = context.entities.pointer_index.get(copying_typed_let.destination_entity).?;
-            const element_type = context.entities.pointers.items[pointer_index];
-            assert(type_entity_element_type == element_type or element_type == Void);
-            context.entities.pointers.items[pointer_index] = type_entity_element_type;
+        else => {
+            if (context.entities.values.get(type_of)) |value| {
+                switch (value) {
+                    Ptr => {
+                        assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
+                        const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
+                        const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
+                        assert(context.entities.types.get(type_entity_element_type).? == Type);
+                        const pointer_index = context.entities.pointer_index.get(copying_typed_let.destination_entity).?;
+                        const element_type = context.entities.pointers.items[pointer_index];
+                        assert(type_entity_element_type == element_type or element_type == Void);
+                        context.entities.pointers.items[pointer_index] = type_entity_element_type;
+                    },
+                    Array => {
+                        assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
+                        const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
+                        const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
+                        assert(context.entities.types.get(type_entity_element_type).? == Type);
+                        const source_entity_type = context.entities.types.get(copying_typed_let.source_entity).?;
+                        const array_index = context.entities.array_index.get(source_entity_type).?;
+                        const element_type = context.entities.arrays.types.items[array_index];
+                        assert(type_entity_element_type == element_type);
+                        assert(element_type == U8);
+                        const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(copying_typed_let.source_entity).?];
+                        const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
+                        defer context.allocator.free(buffer);
+                        const null_terminated_string = try internString(context.entities, buffer);
+                        try insertUniqueId(&context.x86.bytes, null_terminated_string);
+                        context.stack.top += 8;
+                        const result_offset = context.stack.top;
+                        try context.stack.entity.putNoClobber(copying_typed_let.destination_entity, result_offset);
+                        try context.entities.types.putNoClobber(copying_typed_let.destination_entity, copying_typed_let.type_entity);
+                        const eight = try internInt(context, 8);
+                        try opRegLiteral(context, .Sub, .Rsp, eight);
+                        try opRegByte(context, .Mov, .Rdi, null_terminated_string);
+                        try opStackReg(context, .Mov, result_offset, .Rdi);
+                    },
+                    else => unreachable,
+                }
+            } else {
+                assert(type_of == copying_typed_let.type_entity);
+            }
         },
-        Array => {
-            assert(context.entities.values.get(copying_typed_let.type_entity).? == Ptr);
-            const type_entity_pointer_index = context.entities.pointer_index.get(copying_typed_let.type_entity).?;
-            const type_entity_element_type = context.entities.pointers.items[type_entity_pointer_index];
-            assert(context.entities.types.get(type_entity_element_type).? == Type);
-            const array_index = context.entities.array_index.get(copying_typed_let.source_entity).?;
-            const element_type = context.entities.arrays.types.items[array_index];
-            assert(type_entity_element_type == element_type);
-            assert(element_type == U8);
-            const string_literal = context.entities.interned_strings.data.items[context.entities.literals.get(copying_typed_let.source_entity).?];
-            const buffer = try std.fmt.allocPrint(context.allocator, "{s}, 0", .{string_literal});
-            defer context.allocator.free(buffer);
-            const null_terminated_string = try internString(context.entities, buffer);
-            try insertUniqueId(&context.x86.bytes, null_terminated_string);
-            context.stack.top += 8;
-            const result_offset = context.stack.top;
-            try context.stack.entity.putNoClobber(copying_typed_let.destination_entity, result_offset);
-            try context.entities.types.putNoClobber(copying_typed_let.destination_entity, copying_typed_let.type_entity);
-            const eight = try internInt(context, 8);
-            try opRegLiteral(context, .Sub, .Rsp, eight);
-            try opRegByte(context, .Mov, .Rdi, null_terminated_string);
-            try opStackReg(context, .Mov, result_offset, .Rdi);
-        },
-        else => assert(type_of == copying_typed_let.type_entity),
     }
     const literal = context.entities.literals.get(copying_typed_let.source_entity).?;
     try context.entities.literals.putNoClobber(copying_typed_let.destination_entity, literal);
