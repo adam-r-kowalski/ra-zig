@@ -509,6 +509,27 @@ fn writeCall(writer: Writer, block: Block, block_entity: usize) !void {
     try output.insertSlice("))");
 }
 
+fn writeLet(writer: Writer, block: Block, block_entity: usize, kind: ExpressionKind) !void {
+    const output = writer.output;
+    try output.insertSlice("\n    (let ");
+    switch (kind) {
+        .CopyingLet => {
+            const let = block.copying_lets.items[block.indices.items[block_entity]];
+            try writeName(writer, let.destination_entity);
+            _ = try output.insert(' ');
+            try writeName(writer, let.source_entity);
+        },
+        .CopyingTypedLet => {
+            const let = block.copying_typed_lets.items[block.indices.items[block_entity]];
+            try writeName(writer, let.destination_entity);
+            _ = try output.insert(' ');
+            try writeName(writer, let.source_entity);
+        },
+        else => unreachable,
+    }
+    _ = try output.insert(')');
+}
+
 fn writeBranch(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const branch = block.branches.items[block.indices.items[block_entity]];
@@ -546,8 +567,8 @@ fn writeExpressions(writer: Writer, block: Block) !void {
             .Phi => try writePhi(writer, block, entity),
             .Jump => try writeJump(writer, block, entity),
             .TypedLet => continue,
-            .CopyingTypedLet => continue,
-            .CopyingLet => continue,
+            .CopyingTypedLet => try writeLet(writer, block, entity, .CopyingTypedLet),
+            .CopyingLet => try writeLet(writer, block, entity, .CopyingLet),
         }
     }
 }
