@@ -546,6 +546,8 @@ fn writeExpressions(writer: Writer, block: Block) !void {
             .Phi => try writePhi(writer, block, entity),
             .Jump => try writeJump(writer, block, entity),
             .TypedLet => continue,
+            .CopyingTypedLet => continue,
+            .CopyingLet => continue,
         }
     }
 }
