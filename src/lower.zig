@@ -172,7 +172,7 @@ fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_
                 _ = try block.indices.insert(copying_typed_let);
                 return let_entity;
             } else {
-                try entities.names.putNoClobber(entity, name);
+                result.entry.value = name;
                 try scope.name_to_entity.putNoClobber(name, entity);
                 _ = try block.kinds.insert(.TypedLet);
                 const typed_let = try block.typed_lets.insert(.{ .entity = entity, .type_entity = type_entity });
