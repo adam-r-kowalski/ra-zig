@@ -13,36 +13,56 @@ pub const BlockIndex = usize;
 pub const Register = enum(usize) {
     Rax,
     Eax,
+    Al,
+    Ah,
     Rbx,
     Ebx,
+    Bl,
+    Bh,
     Rcx,
     Ecx,
+    Cl,
+    Ch,
     Rdx,
     Edx,
+    Dl,
+    Dh,
     Rsp,
     Esp,
+    Spl,
     Rbp,
     Ebp,
+    Bpl,
     Rsi,
     Esi,
+    Sil,
     Rdi,
     Edi,
+    Dil,
     R8,
-    R8D,
+    R8d,
+    R8b,
     R9,
-    R9D,
+    R9d,
+    R9b,
     R10,
-    R10D,
+    R10d,
+    R10b,
     R11,
-    R11D,
+    R11d,
+    R11b,
     R12,
-    R12D,
+    R12d,
+    R12b,
     R13,
-    R13D,
+    R13d,
+    R13b,
     R14,
-    R14D,
+    R14d,
+    R14b,
     R15,
-    R15D,
+    R15d,
+    R15b,
 };
 
 pub const SseRegister = enum(usize) {
@@ -96,6 +116,8 @@ pub const Kind = enum(u8) {
     RelativeQword,
     StackOffsetQword,
     StackOffsetDword,
+    StackOffsetByte,
+    BytePointer,
 };
 
 pub const Block = struct {
@@ -104,11 +126,17 @@ pub const Block = struct {
     operands: List([]const usize),
 };
 
+pub const UniqueIds = struct {
+    string_to_index: Map(InternedString, usize),
+    index_to_string: List(InternedString),
+    next_index: usize,
+};
+
 pub const X86 = struct {
     blocks: List(Block),
     externs: Set(InternedString),
-    bytes: Set(InternedString),
-    quad_words: Set(InternedString),
+    bytes: UniqueIds,
+    quad_words: UniqueIds,
     arena: *Arena,
 
     pub fn deinit(self: *@This()) void {

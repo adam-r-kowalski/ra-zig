@@ -25,6 +25,8 @@ pub const ExpressionKind = enum(u8) {
     Phi,
     Jump,
     TypedLet,
+    CopyingLet,
+    CopyingTypedLet,
 };
 
 pub const Call = struct {
@@ -52,12 +54,25 @@ pub const TypedLet = struct {
     type_entity: Entity,
 };
 
+pub const CopyingLet = struct {
+    destination_entity: Entity,
+    source_entity: Entity,
+};
+
+pub const CopyingTypedLet = struct {
+    destination_entity: Entity,
+    source_entity: Entity,
+    type_entity: Entity,
+};
+
 pub const Block = struct {
     active_scopes: []const usize,
     kinds: List(ExpressionKind),
     indices: List(usize),
     returns: List(Entity),
     typed_lets: List(TypedLet),
+    copying_lets: List(CopyingLet),
+    copying_typed_lets: List(CopyingTypedLet),
     calls: List(Call),
     branches: List(Branch),
     phis: List(Phi),

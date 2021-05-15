@@ -20,6 +20,8 @@ const Call = data.ir.Call;
 const Branch = data.ir.Branch;
 const Phi = data.ir.Phi;
 const TypedLet = data.ir.TypedLet;
+const CopyingLet = data.ir.CopyingLet;
+const CopyingTypedLet = data.ir.CopyingTypedLet;
 const Entities = data.entity.Entities;
 const Entity = data.entity.Entity;
 const Builtins = data.entity.Builtins;
@@ -73,11 +75,15 @@ fn lowerString(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const active_scopes = overload.blocks.items[active_block.*].active_scopes;
     const entity = entities.next_entity;
     entities.next_entity += 1;
+    const type_of = entities.next_entity;
+    entities.next_entity += 1;
     try entities.literals.putNoClobber(entity, string);
-    try entities.types.putNoClobber(entity, @enumToInt(Builtins.Array));
+    try entities.types.putNoClobber(entity, type_of);
+    try entities.types.putNoClobber(type_of, @enumToInt(Builtins.Type));
+    try entities.values.putNoClobber(type_of, @enumToInt(Builtins.Array));
     const array_index = try entities.arrays.types.insert(@enumToInt(Builtins.U8));
     _ = try entities.arrays.lengths.insert(entities.interned_strings.data.items[string].len);
-    try entities.array_index.putNoClobber(entity, array_index);
+    try entities.array_index.putNoClobber(type_of, array_index);
     _ = try overload.scopes.items[active_scopes[active_scopes.len - 1]].entities.insert(entity);
     return entity;
 }
@@ -128,24 +134,55 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
 
 fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
+    const block = &overload.blocks.items[active_block.*];
+    const scope = &overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]];
     switch (children.len) {
         2 => {
             const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
-            try entities.names.putNoClobber(entity, name);
-            const block = &overload.blocks.items[active_block.*];
-            try overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
-            return entity;
+            const result = try entities.names.getOrPut(entity);
+            if (result.found_existing) {
+                const let_entity = entities.next_entity;
+                entities.next_entity += 1;
+                try entities.names.putNoClobber(let_entity, name);
+                try scope.name_to_entity.putNoClobber(name, let_entity);
+                _ = try block.kinds.insert(.CopyingLet);
+                const copying_let = try block.copying_lets.insert(.{
+                    .destination_entity = let_entity,
+                    .source_entity = entity,
+                });
+                _ = try block.indices.insert(copying_let);
+                return let_entity;
+            } else {
+                result.entry.value = name;
+                try scope.name_to_entity.putNoClobber(name, entity);
+                return entity;
+            }
         },
         3 => {
             const type_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
             const entity = try lowerExpression(ir, entities, overload, ast, active_block, children[2]);
-            try entities.names.putNoClobber(entity, name);
-            const block = &overload.blocks.items[active_block.*];
-            try overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]].name_to_entity.putNoClobber(name, entity);
-            _ = try block.kinds.insert(.TypedLet);
-            const typed_let = try block.typed_lets.insert(.{ .entity = entity, .type_entity = type_entity });
-            _ = try block.indices.insert(typed_let);
-            return entity;
+            const result = try entities.names.getOrPut(entity);
+            if (result.found_existing) {
+                const let_entity = entities.next_entity;
+                entities.next_entity += 1;
+                try entities.names.putNoClobber(let_entity, name);
+                try scope.name_to_entity.putNoClobber(name, let_entity);
+                _ = try block.kinds.insert(.CopyingTypedLet);
+                const copying_typed_let = try block.copying_typed_lets.insert(.{
+                    .destination_entity = let_entity,
+                    .source_entity = entity,
+                    .type_entity = type_entity,
+                });
+                _ = try block.indices.insert(copying_typed_let);
+                return let_entity;
+            } else {
+                result.entry.value = name;
+                try scope.name_to_entity.putNoClobber(name, entity);
+                _ = try block.kinds.insert(.TypedLet);
+                const typed_let = try block.typed_lets.insert(.{ .entity = entity, .type_entity = type_entity });
+                _ = try block.indices.insert(typed_let);
+                return entity;
+            }
         },
         else => unreachable,
     }
@@ -206,6 +243,8 @@ fn newBlockAndScope(allocator: *Allocator, overload: *Overload, currently_active
     block.indices = List(usize).init(allocator);
     block.returns = List(Entity).init(allocator);
     block.typed_lets = List(TypedLet).init(allocator);
+    block.copying_lets = List(CopyingLet).init(allocator);
+    block.copying_typed_lets = List(CopyingTypedLet).init(allocator);
     block.calls = List(Call).init(allocator);
     block.branches = List(Branch).init(allocator);
     block.phis = List(Phi).init(allocator);

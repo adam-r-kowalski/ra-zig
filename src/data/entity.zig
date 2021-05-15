@@ -52,6 +52,7 @@ pub const Builtins = enum(Entity) {
     Mmap,
     Munmap,
     Read,
+    Deref,
 };
 
 pub const names = blk: {
@@ -97,9 +98,13 @@ fn loadBuiltinEntities(entities: *Entities) !void {
         try entities.types.putNoClobber(@enumToInt(entity), @enumToInt(Builtins.Type));
     }
     const Null = @enumToInt(Builtins.Null);
-    try entities.types.putNoClobber(Null, @enumToInt(Builtins.Ptr));
+    const null_type = entities.next_entity;
+    entities.next_entity += 1;
+    try entities.types.putNoClobber(Null, null_type);
+    try entities.types.putNoClobber(null_type, @enumToInt(Builtins.Type));
+    try entities.values.putNoClobber(null_type, @enumToInt(Builtins.Ptr));
     const index = try entities.pointers.insert(@enumToInt(Builtins.Void));
-    try entities.pointer_index.putNoClobber(Null, index);
+    try entities.pointer_index.putNoClobber(null_type, index);
     const zero = try internString(entities, "0");
     try entities.literals.putNoClobber(Null, zero);
 }
