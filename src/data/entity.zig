@@ -29,6 +29,8 @@ pub const Builtins = enum(Entity) {
     Fn,
     If,
     Let,
+    Var,
+    Set_bang_,
     Type,
     Int,
     I64,
@@ -58,16 +60,30 @@ pub const Builtins = enum(Entity) {
 pub const names = blk: {
     const fields = @typeInfo(Builtins).Enum.fields;
     var data: [fields.len][]const u8 = undefined;
-    for (fields) |field, i| {
+    for (fields) |field, field_index| {
         var name: [field.name.len]u8 = undefined;
-        for (field.name) |c, j| {
+        var name_index: usize = 0;
+        var length: usize = 0;
+        while (name_index < field.name.len) {
+            const c = field.name[name_index];
             switch (c) {
-                'A'...'Z' => name[j] = std.ascii.toLower(c),
-                '_' => name[j] = '-',
-                else => name[j] = c,
+                'A'...'Z' => name[name_index] = std.ascii.toLower(c),
+                '_' => {
+                    if ((field.name.len - 5 > name_index) and std.mem.eql(u8, field.name[name_index .. name_index + 6], "_bang_")) {
+                        name[name_index] = '!';
+                        name_index += 6;
+                        length += 1;
+                        continue;
+                    } else {
+                        name[name_index] = '-';
+                    }
+                },
+                else => name[name_index] = c,
             }
+            name_index += 1;
+            length += 1;
         }
-        data[i] = name[0..];
+        data[field_index] = name[0..length];
     }
     break :blk data;
 };
@@ -91,7 +107,7 @@ fn loadBuiltinEntities(entities: *Entities) !void {
         const interned_string = try internString(entities, name);
         try entities.names.putNoClobber(i, interned_string);
     }
-    for ([_]Builtins{ .Fn, .If, .Let }) |entity| {
+    for ([_]Builtins{ .Fn, .If, .Let, .Set_bang_ }) |entity| {
         try entities.types.putNoClobber(@enumToInt(entity), @enumToInt(Builtins.Special_Form));
     }
     for ([_]Builtins{ .Type, .Int, .I64, .I32, .U8, .Float, .F64, .Array, .Ptr, .Void }) |entity| {
@@ -117,6 +133,8 @@ pub const Entities = struct {
     overload_index: Map(Entity, usize),
     array_index: Map(Entity, usize),
     pointer_index: Map(Entity, usize),
+    mutable: Map(Entity, bool),
+    rootMutableEntity: Map(Entity, Entity),
     next_entity: Entity,
     interned_strings: InternedStrings,
     overloads: Overloads,
@@ -136,6 +154,8 @@ pub const Entities = struct {
             .overload_index = Map(Entity, usize).init(&arena.allocator),
             .array_index = Map(Entity, usize).init(&arena.allocator),
             .pointer_index = Map(Entity, usize).init(&arena.allocator),
+            .mutable = Map(Entity, bool).init(&arena.allocator),
+            .rootMutableEntity = Map(Entity, Entity).init(&arena.allocator),
             .next_entity = next_id,
             .interned_strings = InternedStrings{
                 .data = List([]const u8).init(&arena.allocator),
