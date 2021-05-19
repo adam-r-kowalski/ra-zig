@@ -538,25 +538,60 @@ fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs:
     try context.entities.types.putNoClobber(call.result_entity, F64);
 }
 
+fn codegenBinaryOpPointerInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
+    assert(op == .Add);
+    try moveToRegister(context, .Rax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
+        try opRegLiteral(context, .Mov, .Rcx, value);
+        try opRegReg(context, op, .Rax, .Rcx);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, op, .Rax, offset);
+    } else {
+        unreachable;
+    }
+    context.stack.top += 8;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const eight = try internInt(context, 8);
+    try opRegLiteral(context, .Sub, .Rsp, eight);
+    try opStackReg(context, .Mov, offset, .Rax);
+    try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
 fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
     assert(call.argument_entities.len == 2);
     const lhs = call.argument_entities[0];
     const rhs = call.argument_entities[1];
-    switch (context.entities.types.get(lhs).?) {
-        Int => switch (context.entities.types.get(rhs).?) {
+    const lhs_type = context.entities.types.get(lhs).?;
+    const rhs_type = context.entities.types.get(rhs).?;
+    switch (lhs_type) {
+        Int => switch (rhs_type) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
             Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
             else => unreachable,
         },
-        I64 => switch (context.entities.types.get(rhs).?) {
+        I64 => switch (rhs_type) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
             else => unreachable,
         },
-        Float, F64 => switch (context.entities.types.get(rhs).?) {
+        Float, F64 => switch (rhs_type) {
             Int, Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
             else => unreachable,
         },
-        else => unreachable,
+        else => {
+            if (context.entities.values.get(lhs_type)) |value| {
+                switch (value) {
+                    Ptr => switch (rhs_type) {
+                        Int => try codegenBinaryOpPointerInt(context, call, ops.int, lhs, rhs),
+                        else => unreachable,
+                    },
+                    else => unreachable,
+                }
+            } else {
+                unreachable;
+            }
+        },
     }
 }
 
