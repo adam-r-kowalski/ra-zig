@@ -146,7 +146,8 @@ test "copying let" {
         \\  (scope %function)
         \\  (scope %s0)
         \\  (scope %s1
-        \\    (entity :name x :value 0))
+        \\    (entity :name x :value 0)
+        \\    (entity :name y))
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
@@ -187,7 +188,8 @@ test "copying typed let" {
         \\  (scope %function)
         \\  (scope %s0)
         \\  (scope %s1
-        \\    (entity :name x :value 0))
+        \\    (entity :name x :value 0)
+        \\    (entity :name y))
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
@@ -561,5 +563,89 @@ test "overloading" {
         \\    (let %t1 (height r))
         \\    (let %t2 (mul %t0 %t1))
         \\    (return %t2)))
+    );
+}
+
+test "var binding with 1 set" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (var x 0)
+        \\  (set! x 5)
+        \\  x)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn start
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name x :value 0)
+        \\    (entity :name %t0 :value 5))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return %t0)))
+    );
+}
+
+test "var binding with 2 sets" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (var x 0)
+        \\  (set! x 5)
+        \\  (set! x 10)
+        \\  x)
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try lang.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn start
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name x :value 0)
+        \\    (entity :name %t0 :value 5)
+        \\    (entity :name %t1 :value 10))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i64))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (return %t1)))
     );
 }

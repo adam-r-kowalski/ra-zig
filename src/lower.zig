@@ -132,7 +132,7 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
     return result_entity;
 }
 
-fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
+fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children, mutable: bool) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
     const block = &overload.blocks.items[active_block.*];
     const scope = &overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]];
@@ -145,16 +145,21 @@ fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_
                 entities.next_entity += 1;
                 try entities.names.putNoClobber(let_entity, name);
                 try scope.name_to_entity.putNoClobber(name, let_entity);
+                _ = try scope.entities.insert(let_entity);
                 _ = try block.kinds.insert(.CopyingLet);
                 const copying_let = try block.copying_lets.insert(.{
                     .destination_entity = let_entity,
                     .source_entity = entity,
                 });
                 _ = try block.indices.insert(copying_let);
+                try entities.mutable.putNoClobber(let_entity, mutable);
+                try entities.rootMutableEntity.putNoClobber(let_entity, let_entity);
                 return let_entity;
             } else {
                 result.entry.value = name;
                 try scope.name_to_entity.putNoClobber(name, entity);
+                try entities.mutable.putNoClobber(entity, mutable);
+                try entities.rootMutableEntity.putNoClobber(entity, entity);
                 return entity;
             }
         },
@@ -167,6 +172,7 @@ fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_
                 entities.next_entity += 1;
                 try entities.names.putNoClobber(let_entity, name);
                 try scope.name_to_entity.putNoClobber(name, let_entity);
+                _ = try scope.entities.insert(let_entity);
                 _ = try block.kinds.insert(.CopyingTypedLet);
                 const copying_typed_let = try block.copying_typed_lets.insert(.{
                     .destination_entity = let_entity,
@@ -174,6 +180,8 @@ fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_
                     .type_entity = type_entity,
                 });
                 _ = try block.indices.insert(copying_typed_let);
+                try entities.mutable.putNoClobber(let_entity, mutable);
+                try entities.rootMutableEntity.putNoClobber(let_entity, let_entity);
                 return let_entity;
             } else {
                 result.entry.value = name;
@@ -181,11 +189,29 @@ fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_
                 _ = try block.kinds.insert(.TypedLet);
                 const typed_let = try block.typed_lets.insert(.{ .entity = entity, .type_entity = type_entity });
                 _ = try block.indices.insert(typed_let);
+                try entities.mutable.putNoClobber(entity, mutable);
+                try entities.rootMutableEntity.putNoClobber(entity, entity);
                 return entity;
             }
         },
         else => unreachable,
     }
+}
+
+fn lowerSet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
+    const block = &overload.blocks.items[active_block.*];
+    const scope = &overload.scopes.items[block.active_scopes[block.active_scopes.len - 1]];
+    assert(children.len == 2);
+    const name_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[0]);
+    assert(entities.mutable.get(name_entity).?);
+    const value_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[1]);
+    assert(entities.names.get(value_entity) == null);
+    try entities.mutable.putNoClobber(value_entity, true);
+    const root = entities.rootMutableEntity.get(name_entity).?;
+    try entities.rootMutableEntity.putNoClobber(value_entity, root);
+    const name = entities.names.get(root).?;
+    try scope.name_to_entity.put(name, value_entity);
+    return value_entity;
 }
 
 fn lowerCall(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, function_entity: Entity, children: Children) !Entity {
@@ -212,7 +238,9 @@ fn lowerParens(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const function = try lowerExpression(ir, entities, overload, ast, active_block, children[0]);
     return switch (function) {
         @enumToInt(Builtins.If) => lowerIf(ir, entities, overload, ast, active_block, children[1..]),
-        @enumToInt(Builtins.Let) => lowerLet(ir, entities, overload, ast, active_block, children[1..]),
+        @enumToInt(Builtins.Let) => lowerLet(ir, entities, overload, ast, active_block, children[1..], false),
+        @enumToInt(Builtins.Var) => lowerLet(ir, entities, overload, ast, active_block, children[1..], true),
+        @enumToInt(Builtins.Set_bang_) => lowerSet(ir, entities, overload, ast, active_block, children[1..]),
         else => lowerCall(ir, entities, overload, ast, active_block, function, children[1..]),
     };
 }
@@ -566,9 +594,9 @@ fn writeExpressions(writer: Writer, block: Block) !void {
             .Branch => try writeBranch(writer, block, entity),
             .Phi => try writePhi(writer, block, entity),
             .Jump => try writeJump(writer, block, entity),
-            .TypedLet => continue,
             .CopyingTypedLet => try writeLet(writer, block, entity, .CopyingTypedLet),
             .CopyingLet => try writeLet(writer, block, entity, .CopyingLet),
+            .TypedLet => continue,
         }
     }
 }
