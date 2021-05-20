@@ -1922,7 +1922,9 @@ test "pointer arithmetic" {
         \\  :body
         \\  (let data "hello")
         \\  (let pointer (ptr u8) data)
+        \\  (print pointer)
         \\  (let pointer2 (add pointer 1))
+        \\  (print pointer)
         \\  0)
     ;
     var entities = try lang.data.Entities.init(&gpa.allocator);
@@ -1937,12 +1939,23 @@ test "pointer arithmetic" {
     const expected =
         \\    global _main
         \\
+        \\    section .data
+        \\
+        \\byte0: db "hello", 0
+        \\
         \\    section .text
         \\
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 10
+        \\    sub rsp, 8
+        \\    mov rdi, byte0
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    add rax, 1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;

@@ -409,7 +409,8 @@ fn codegenPrintPtr(context: Context, call: Call, type_of: Entity) !void {
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
     try opRegByte(context, .Mov, .Rdi, format_string);
-    try moveToRegister(context, .Rsi, argument);
+    const argument_offset = context.stack.entity.get(argument).?;
+    try opRegStack(context, .Mov, .Rsi, argument_offset);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
@@ -539,24 +540,31 @@ fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs:
 }
 
 fn codegenBinaryOpPointerInt(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
-    assert(op == .Add);
-    try moveToRegister(context, .Rax, lhs);
+    assert(op == .Add or op == .Sub);
+    const lhs_offset = context.stack.entity.get(lhs).?;
+    try opRegStack(context, .Mov, .Rax, lhs_offset);
     if (context.entities.literals.get(rhs)) |value| {
         assert(context.entities.types.get(rhs).? == @enumToInt(Builtins.Int));
-        try opRegLiteral(context, .Mov, .Rcx, value);
-        try opRegReg(context, op, .Rax, .Rcx);
-    } else if (context.stack.entity.get(rhs)) |offset| {
-        try opRegStack(context, op, .Rax, offset);
+        try opRegLiteral(context, op, .Rax, value);
+    } else if (context.stack.entity.get(rhs)) |rhs_offset| {
+        try opRegStack(context, op, .Rax, rhs_offset);
     } else {
         unreachable;
     }
     context.stack.top += 8;
-    const offset = context.stack.top;
-    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const result_offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, result_offset);
     const eight = try internInt(context, 8);
     try opRegLiteral(context, .Sub, .Rsp, eight);
-    try opStackReg(context, .Mov, offset, .Rax);
-    try context.entities.types.putNoClobber(call.result_entity, I64);
+    try opStackReg(context, .Mov, result_offset, .Rax);
+    const type_of = context.entities.next_entity;
+    context.entities.next_entity += 1;
+    try context.entities.types.putNoClobber(call.result_entity, type_of);
+    try context.entities.values.putNoClobber(type_of, Ptr);
+    const pointer_index = context.entities.pointer_index.get(context.entities.types.get(lhs).?).?;
+    const index = try context.entities.pointers.insert(context.entities.pointers.items[pointer_index]);
+    try context.entities.pointer_index.putNoClobber(type_of, index);
+    try context.entities.types.putNoClobber(type_of, Type);
 }
 
 fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
