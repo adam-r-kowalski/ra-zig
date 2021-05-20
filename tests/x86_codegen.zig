@@ -1912,3 +1912,59 @@ test "var binding with 2 sets" {
     expectEqualStrings(x86_string.slice(), expected);
     x86_string.deinit();
 }
+
+test "pointer arithmetic" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i64
+        \\  :body
+        \\  (let a "hello")
+        \\  (let p (ptr u8) a)
+        \\  (let p2 (add p 1))
+        \\  (print p2))
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var ast = try lang.parse(allocator, &entities, source);
+    var ir = try lang.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try lang.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try lang.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\    extern _printf
+        \\
+        \\    section .data
+        \\
+        \\byte0: db "hello", 0
+        \\byte1: db "%s", 10, 0
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov rdi, byte0
+        \\    mov qword [rbp-8], rdi
+        \\    mov rax, qword [rbp-8]
+        \\    add rax, 1
+        \\    sub rsp, 8
+        \\    mov qword [rbp-16], rax
+        \\    mov rdi, byte1
+        \\    mov rsi, qword [rbp-16]
+        \\    xor rax, rax
+        \\    call _printf
+        \\    sub rsp, 8
+        \\    mov qword [rbp-24], rax
+        \\    mov rdi, qword [rbp-24]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}
