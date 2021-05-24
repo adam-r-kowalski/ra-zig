@@ -74,6 +74,17 @@ fn string(ast: *Ast, entities: *Entities, source: *Source) !usize {
     return try insert(.String, ast, entities, source, length);
 }
 
+fn characterLiteral(ast: *Ast, entities: *Entities, source: *Source) !usize {
+    var length: usize = 1;
+    while (length < source.input.len) : (length += 1) {
+        if (source.input[length] == '\'') {
+            length += 1;
+            break;
+        }
+    }
+    return try insert(.Char, ast, entities, source, length);
+}
+
 fn isWhitespace(char: u8) bool {
     return switch (char) {
         ' ', '\n' => true,
@@ -95,6 +106,7 @@ fn expression(ast: *Ast, entities: *Entities, source: *Source) error{OutOfMemory
         '(' => try list(.Parens, ')', ast, entities, source),
         '[' => try list(.Brackets, ']', ast, entities, source),
         '"' => try string(ast, entities, source),
+        '\'' => try characterLiteral(ast, entities, source),
         ':' => try identifier(.Keyword, ast, entities, source),
         else => try identifier(.Symbol, ast, entities, source),
     };
@@ -147,6 +159,7 @@ fn expressionString(output: *List(u8), ast: Ast, entities: Entities, index: usiz
         .Symbol => try writeLiteral(output, entities, "symbol", data_index),
         .Keyword => try writeLiteral(output, entities, "keyword", data_index),
         .String => try writeLiteral(output, entities, "string", data_index),
+        .Char => try writeLiteral(output, entities, "char", data_index),
         .Parens => try writeList(output, ast, entities, "parens", data_index, depth),
         .Brackets => try writeList(output, ast, entities, "brackets", data_index, depth),
     }

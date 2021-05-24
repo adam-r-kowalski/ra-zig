@@ -46,6 +46,7 @@ pub const Builtins = enum(Entity) {
     Sub,
     Mul,
     Div,
+    Equal,
     Bit_Or,
     Print,
     Open,

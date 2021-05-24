@@ -145,6 +145,18 @@ fn opRegLiteral(context: Context, op: Instruction, to: Register, lit: InternedSt
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opRegImmediate(context: Context, op: Instruction, to: Register, value: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .Register;
+    operand_kinds[1] = .Immediate;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = @enumToInt(to);
+    operands[1] = value;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opStackLiteral(context: Context, op: Instruction, offset: usize, literal: InternedString) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
@@ -455,8 +467,12 @@ const SubOps = BinaryOps{ .int = .Sub, .float = .Subsd };
 const MulOps = BinaryOps{ .int = .Imul, .float = .Mulsd };
 
 fn moveToRegister(context: Context, register: Register, entity: Entity) !void {
-    if (context.entities.literals.get(entity)) |value| {
-        try opRegLiteral(context, .Mov, register, value);
+    if (context.entities.values.get(entity)) |value| {
+        try opRegImmediate(context, .Mov, register, value);
+        return;
+    }
+    if (context.entities.literals.get(entity)) |literal| {
+        try opRegLiteral(context, .Mov, register, literal);
         return;
     }
     const offset = context.stack.entity.get(entity).?;
@@ -504,6 +520,26 @@ fn codegenBinaryOpIntInt(context: Context, call: Call, op: Instruction, lhs: Ent
     try opRegLiteral(context, .Sub, .Rsp, eight);
     try opStackReg(context, .Mov, offset, .Rax);
     try context.entities.types.putNoClobber(call.result_entity, I64);
+}
+
+fn codegenBinaryOpU8U8(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
+    try moveToRegister(context, .Al, lhs);
+    if (context.entities.values.get(rhs)) |value| {
+        try opRegImmediate(context, op, .Al, value);
+    } else if (context.entities.literals.get(rhs)) |literal| {
+        try opRegLiteral(context, op, .Al, literal);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, op, .Al, offset);
+    } else {
+        unreachable;
+    }
+    context.stack.top += 1;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const one = try internInt(context, 1);
+    try opRegLiteral(context, .Sub, .Rsp, one);
+    try opStackReg(context, .Mov, offset, .Al);
+    try context.entities.types.putNoClobber(call.result_entity, U8);
 }
 
 fn codegenBinaryOpFloatFloat(context: Context, call: Call, op: Instruction, lhs: Entity, rhs: Entity) !void {
@@ -576,11 +612,16 @@ fn codegenBinaryOp(context: Context, call: Call, ops: BinaryOps) !void {
     switch (lhs_type) {
         Int => switch (rhs_type) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
+            U8 => try codegenBinaryOpU8U8(context, call, ops.int, lhs, rhs),
             Float, F64 => try codegenBinaryOpFloatFloat(context, call, ops.float, lhs, rhs),
             else => unreachable,
         },
         I64 => switch (rhs_type) {
             Int, I64 => try codegenBinaryOpIntInt(context, call, ops.int, lhs, rhs),
+            else => unreachable,
+        },
+        U8 => switch (rhs_type) {
+            Int, U8 => try codegenBinaryOpU8U8(context, call, ops.int, lhs, rhs),
             else => unreachable,
         },
         Float, F64 => switch (rhs_type) {
@@ -646,10 +687,47 @@ fn codegenDivide(context: Context, call: Call) !void {
     }
 }
 
+fn codegenEqualU8(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
+    try moveToRegister(context, .Al, lhs);
+    if (context.entities.values.get(rhs)) |value| {
+        try opRegImmediate(context, .Cmp, .Al, value);
+    } else if (context.entities.literals.get(rhs)) |literal| {
+        try opRegLiteral(context, .Cmp, .Al, literal);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, .Cmp, .Al, offset);
+    } else {
+        unreachable;
+    }
+    try opReg(context, .Sete, .Al);
+    context.stack.top += 1;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    const one = try internInt(context, 1);
+    try opRegLiteral(context, .Sub, .Rsp, one);
+    try opStackReg(context, .Mov, offset, .Al);
+    try context.entities.types.putNoClobber(call.result_entity, U8);
+}
+
+fn codegenEqual(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs = call.argument_entities[0];
+    const rhs = call.argument_entities[1];
+    switch (context.entities.types.get(lhs).?) {
+        Int => switch (context.entities.types.get(rhs).?) {
+            U8 => try codegenEqualU8(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        U8 => switch (context.entities.types.get(rhs).?) {
+            Int, U8 => try codegenEqualU8(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        else => unreachable,
+    }
+}
+
 fn codegenBitOrI64(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
     try moveToRegister(context, .Rax, lhs);
     if (context.entities.literals.get(rhs)) |value| {
-        const rhs_type = context.entities.types.get(rhs).?;
         try opRegLiteral(context, .Mov, .Rcx, value);
         try opRegReg(context, .Or, .Rax, .Rcx);
     } else if (context.stack.entity.get(rhs)) |offset| {
@@ -669,7 +747,6 @@ fn codegenBitOrI64(context: Context, call: Call, lhs: Entity, rhs: Entity) !void
 fn codegenBitOrI32(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
     try moveToRegister(context, .Eax, lhs);
     if (context.entities.literals.get(rhs)) |value| {
-        const rhs_type = context.entities.types.get(rhs).?;
         try opRegLiteral(context, .Mov, .Ecx, value);
         try opRegReg(context, .Or, .Eax, .Ecx);
     } else if (context.stack.entity.get(rhs)) |offset| {
@@ -900,7 +977,7 @@ fn codegenTypedLet(context: Context, typed_let_index: usize) !void {
     switch (type_of) {
         Int => {
             switch (typed_let.type_entity) {
-                Int, I64, I32 => try context.entities.types.put(typed_let.entity, typed_let.type_entity),
+                Int, I64, I32, U8 => try context.entities.types.put(typed_let.entity, typed_let.type_entity),
                 else => unreachable,
             }
         },
@@ -1011,6 +1088,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Sub) => try codegenBinaryOp(context, call, SubOps),
         @enumToInt(Builtins.Mul) => try codegenBinaryOp(context, call, MulOps),
         @enumToInt(Builtins.Div) => try codegenDivide(context, call),
+        @enumToInt(Builtins.Equal) => try codegenEqual(context, call),
         @enumToInt(Builtins.Bit_Or) => try codegenBitOr(context, call),
         @enumToInt(Builtins.Print) => try codegenPrint(context, call),
         @enumToInt(Builtins.Open) => try codegenOpen(context, call),
@@ -1280,6 +1358,8 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Divsd => try output.insertSlice("divsd"),
         .Xor => try output.insertSlice("xor"),
         .Or => try output.insertSlice("or"),
+        .Cmp => try output.insertSlice("cmp"),
+        .Sete => try output.insertSlice("sete"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
         .Cqo => try output.insertSlice("cqo"),
