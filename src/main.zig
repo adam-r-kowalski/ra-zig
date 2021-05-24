@@ -1,6 +1,6 @@
 const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
-const lang = @import("lang");
+const ra = @import("ra");
 
 pub fn main() anyerror!void {
     var timer = try std.time.Timer.start();
@@ -25,19 +25,19 @@ pub fn main() anyerror!void {
     const source = try source_file.readToEndAlloc(temp_allocator, std.math.maxInt(usize));
     defer temp_allocator.free(source);
     const t3 = timer.read();
-    var entities = try lang.data.Entities.init(allocator);
+    var entities = try ra.data.Entities.init(allocator);
     defer entities.deinit();
     const t4 = timer.read();
-    var ast = try lang.parse(allocator, &entities, source);
+    var ast = try ra.parse(allocator, &entities, source);
     defer ast.deinit();
     const t5 = timer.read();
-    var ir = try lang.lower(allocator, &entities, ast);
+    var ir = try ra.lower(allocator, &entities, ast);
     defer ir.deinit();
     const t6 = timer.read();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
     const t7 = timer.read();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     const t8 = timer.read();
     const asm_file = try cwd.createFile("temp/code.asm", .{});

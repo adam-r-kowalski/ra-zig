@@ -1,7 +1,7 @@
 (fn start :args () :ret i64
   :body
-  (let char1 u8 94)
-  (let char2 94)
+  (let char1 u8 97)
+  (let char2 'a')
   (let char3 (equal char1 char2))
   (let char4 (add char3 48))
   (print char4)

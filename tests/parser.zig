@@ -2,15 +2,15 @@ const std = @import("std");
 const Arena = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
 const expectEqualStrings = std.testing.expectEqualStrings;
-const lang = @import("lang");
-const parse = lang.parse;
-var astString = lang.astString;
+const ra = @import("ra");
+const parse = ra.parse;
+var astString = ra.astString;
 
 test "int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "123 475 -923";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -27,7 +27,7 @@ test "float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "12.3 4.75 .923";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -44,7 +44,7 @@ test "symbol" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "foo bar baz -";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -62,7 +62,7 @@ test "keyword" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = ":foo :bar :baz";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -81,7 +81,7 @@ test "character literal" {
     const source =
         \\'a' 'b' 'c'
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -100,7 +100,7 @@ test "string" {
     const source =
         \\"foo" "bar" "baz"
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -117,7 +117,7 @@ test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(add 3 7 (mul 9 5))";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -139,7 +139,7 @@ test "brackets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "[[1 2] [3 4]]";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
@@ -160,7 +160,7 @@ test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
     const source = "(fn start :args () :ret i64 :body 0)";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
     defer ast.deinit();

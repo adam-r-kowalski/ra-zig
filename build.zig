@@ -4,8 +4,8 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("lang", "src/main.zig");
-    exe.addPackage(.{ .name = "lang", .path = "src/lang.zig" });
+    const exe = b.addExecutable("ra", "src/main.zig");
+    exe.addPackage(.{ .name = "ra", .path = "src/ra.zig" });
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.install();
@@ -19,10 +19,10 @@ pub fn build(b: *Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const lang_tests = b.addTest("tests/lang.zig");
-    lang_tests.addPackage(.{ .name = "lang", .path = "src/lang.zig" });
-    lang_tests.setBuildMode(mode);
+    const ra_tests = b.addTest("tests/ra.zig");
+    ra_tests.addPackage(.{ .name = "ra", .path = "src/ra.zig" });
+    ra_tests.setBuildMode(mode);
 
-    const test_step = b.step("test", "Run lang tests");
-    test_step.dependOn(&lang_tests.step);
+    const test_step = b.step("test", "Run ra tests");
+    test_step.dependOn(&ra_tests.step);
 }

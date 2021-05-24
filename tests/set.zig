@@ -1,7 +1,7 @@
 const std = @import("std");
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
-const Set = @import("lang").data.Set;
+const Set = @import("ra").data.Set;
 
 test "set insert and lookup" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};

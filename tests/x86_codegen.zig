@@ -3,24 +3,24 @@ const Arena = std.heap.ArenaAllocator;
 const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
-const lang = @import("lang");
-const parse = lang.parse;
-const lower = lang.lower;
-const Map = lang.data.Map;
-const Entity = lang.data.ir.Entity;
+const ra = @import("ra");
+const parse = ra.parse;
+const lower = ra.lower;
+const Map = ra.data.Map;
+const Entity = ra.data.ir.Entity;
 
 test "trivial" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source = "(fn start :args () :ret i64 :body 42)";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -53,14 +53,14 @@ test "binary op between two signed integers" {
             \\  (let y 15)
             \\  ({s} x y))
         , .{op});
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -102,14 +102,14 @@ test "binary op between three signed integers" {
             \\  (let d 20)
             \\  ({s} c d))
         , .{ op, op });
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -151,15 +151,15 @@ test "divide two signed integers" {
         \\  (let y 4)
         \\  (div x y))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -196,14 +196,14 @@ test "binary op between two signed floats" {
             \\  (let z ({s} x y))
             \\  0)
         , .{op});
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -249,14 +249,14 @@ test "binary op between signed float and comptime int" {
             \\  (let z ({s} x y))
             \\  0)
         , .{op});
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -302,14 +302,14 @@ test "binary op between comptime int and signed float" {
             \\  (let z ({s} x y))
             \\  0)
         , .{op});
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -356,14 +356,14 @@ test "binary op between three signed floats" {
             \\  (let d ({s} c 40.2))
             \\  0)
         , .{ op, op });
-        var entities = try lang.data.Entities.init(&gpa.allocator);
-        var ast = try lang.parse(&gpa.allocator, &entities, source);
+        var entities = try ra.data.Entities.init(&gpa.allocator);
+        var ast = try ra.parse(&gpa.allocator, &entities, source);
         allocator.free(source);
-        var ir = try lang.lower(&gpa.allocator, &entities, ast);
+        var ir = try ra.lower(&gpa.allocator, &entities, ast);
         ast.deinit();
-        var x86 = try lang.codegen(allocator, &entities, ir);
+        var x86 = try ra.codegen(allocator, &entities, ir);
         ir.deinit();
-        var x86_string = try lang.x86String(allocator, x86, entities);
+        var x86_string = try ra.x86String(allocator, x86, entities);
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
@@ -410,15 +410,15 @@ test "print a signed integer" {
         \\  (let a 12345)
         \\  (print a))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -459,15 +459,15 @@ test "print three signed integers" {
         \\  (let c 30)
         \\  (print c))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -513,15 +513,15 @@ test "print a signed float" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source = "(fn start :args () :ret i64 :body (print 12.345))";
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -563,15 +563,15 @@ test "print three signed floats" {
         \\  (let c 35.7)
         \\  (print c))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -623,15 +623,15 @@ test "print string literal" {
         \\(fn start :args () :ret i64
         \\  :body (print "hello world"))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -667,15 +667,15 @@ test "print char literal" {
         \\(fn start :args () :ret i64
         \\  :body (print 'a'))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -713,15 +713,15 @@ test "user defined function single int" {
         \\(fn start :args () :ret i64
         \\  :body (square 6))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -766,15 +766,15 @@ test "user defined function four ints" {
         \\(fn start :args () :ret i64
         \\  :body (slope 0 10 5 20))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -839,15 +839,15 @@ test "two user defined functions taking ints" {
         \\  (let a (slope 0 10 5 20))
         \\  (square a))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -930,15 +930,15 @@ test "call user defined int function twice" {
         \\  (let b (square 15))
         \\  b)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -991,15 +991,15 @@ test "user defined function single float" {
         \\  (let a (square 6.4))
         \\  5)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -1051,15 +1051,15 @@ test "user defined function two floats" {
         \\  (let a (mean 10 20))
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -1121,15 +1121,15 @@ test "call user defined function float function twice" {
         \\  (let b (square 10.4))
         \\  5)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -1189,15 +1189,15 @@ test "call user defined function with heterogeneous" {
         \\  :body
         \\  (f 5 3.4))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
-    var ast = try lang.parse(&gpa.allocator, &entities, source);
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
     defer ast.deinit();
-    var ir = try lang.lower(&gpa.allocator, &entities, ast);
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
     defer ir.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     defer x86.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
         \\    global _main
@@ -1261,13 +1261,13 @@ test "open syscall" {
         \\  (let fd (open "file.txt" o-rdonly))
         \\  (print fd))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1318,13 +1318,13 @@ test "lseek syscall" {
         \\  (let seek-end 2)
         \\  (lseek fd 0 seek-end))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1361,13 +1361,13 @@ test "bit-or" {
         \\  (let prot-write 2)
         \\  (bit-or prot-read prot-write))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1403,13 +1403,13 @@ test "let with explicit type" {
         \\  (let data (bit-or prot-read prot-write))
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1450,13 +1450,13 @@ test "mmap syscall" {
         \\  (let data (ptr u8) (mmap null len prot flags -1 0))
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1504,13 +1504,13 @@ test "read syscall" {
         \\(fn start :args () :ret i64
         \\  :body (read -1 null 100))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1546,13 +1546,13 @@ test "close syscall" {
         \\  (close -1)
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1586,13 +1586,13 @@ test "munmap syscall" {
         \\  (munmap null 0)
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1629,13 +1629,13 @@ test "copying let" {
         \\  (print b)
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1677,13 +1677,13 @@ test "copying typed let" {
         \\  (print b)
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1725,13 +1725,13 @@ test "pointer decay" {
         \\  (let c (deref p))
         \\  0)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1769,7 +1769,7 @@ test "read file contents to buffer" {
         \\(fn start :args () :ret i64
         \\  :body
         \\  (let o-rdonly 0)
-        \\  (let fd (open "/Users/adamkowalski/code/lang/examples/titanic/train.csv" o-rdonly))
+        \\  (let fd (open "/Users/adamkowalski/code/ra/examples/titanic/train.csv" o-rdonly))
         \\  (let seek-end 2)
         \\  (let len (lseek fd 0 seek-end))
         \\  (let seek-set 0)
@@ -1786,13 +1786,13 @@ test "read file contents to buffer" {
         \\  (print data)
         \\  (munmap data len))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1801,7 +1801,7 @@ test "read file contents to buffer" {
         \\
         \\    section .data
         \\
-        \\byte0: db "/Users/adamkowalski/code/lang/examples/titanic/train.csv", 0
+        \\byte0: db "/Users/adamkowalski/code/ra/examples/titanic/train.csv", 0
         \\byte1: db "%s", 10, 0
         \\
         \\    section .text
@@ -1894,13 +1894,13 @@ test "var binding with 1 set" {
         \\  (set! x 5)
         \\  x)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1931,13 +1931,13 @@ test "var binding with 2 sets" {
         \\  (set! x 10)
         \\  x)
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -1968,13 +1968,13 @@ test "pointer arithmetic" {
         \\  (let p2 (add p 1))
         \\  (print p2))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
@@ -2025,13 +2025,13 @@ test "equality between two signed integers" {
         \\  (let d (add c 48))
         \\  (print d))
     ;
-    var entities = try lang.data.Entities.init(&gpa.allocator);
-    var ast = try lang.parse(allocator, &entities, source);
-    var ir = try lang.lower(allocator, &entities, ast);
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
     ast.deinit();
-    var x86 = try lang.codegen(allocator, &entities, ir);
+    var x86 = try ra.codegen(allocator, &entities, ir);
     ir.deinit();
-    var x86_string = try lang.x86String(allocator, x86, entities);
+    var x86_string = try ra.x86String(allocator, x86, entities);
     entities.deinit();
     x86.deinit();
     const expected =
