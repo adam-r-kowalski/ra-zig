@@ -1,4 +1,4 @@
-[ra](https://cdn4.vectorstock.com/i/1000x1000/10/33/egyptian-god-of-sun-ra-vector-501033.jpg)
+[ra](assets/ra.jpeg)
 
 # Ra Programming Language
 
