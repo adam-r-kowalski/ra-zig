@@ -13,6 +13,7 @@ pub const Kind = enum(u8) {
     Parens,
     Brackets,
     String,
+    Char,
 };
 
 pub const Ast = struct {

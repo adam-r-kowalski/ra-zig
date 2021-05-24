@@ -75,6 +75,25 @@ test "keyword" {
     );
 }
 
+test "character literal" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer expect(!gpa.deinit());
+    const source =
+        \\'a' 'b' 'c'
+    ;
+    var entities = try lang.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ast_string = try astString(&gpa.allocator, ast, entities);
+    defer ast_string.deinit();
+    expectEqualStrings(ast_string.slice(),
+        \\(char 'a')
+        \\(char 'b')
+        \\(char 'c')
+    );
+}
+
 test "string" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
