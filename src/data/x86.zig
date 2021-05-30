@@ -104,6 +104,7 @@ pub const Instruction = enum(u8) {
     Call,
     Syscall,
     Cqo,
+    Cdq,
     Ret,
 };
 

@@ -13,7 +13,7 @@ test "trivial" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source = "(fn start :args () :ret i64 :body 42)";
+    const source = "(fn start :args () :ret i32 :body 42)";
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
     var ir = try ra.lower(allocator, &entities, ast);
@@ -31,7 +31,7 @@ test "trivial" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 42
+        \\    mov edi, 42
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -47,11 +47,12 @@ test "binary op between two signed integers" {
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let x 10)
             \\  (let y 15)
-            \\  ({s} x y))
+            \\  ({s} x y)
+            \\  0)
         , .{op});
         var entities = try ra.data.Entities.init(&gpa.allocator);
         var ast = try ra.parse(&gpa.allocator, &entities, source);
@@ -76,7 +77,7 @@ test "binary op between two signed integers" {
             \\    {s} rax, rcx
             \\    sub rsp, 8
             \\    mov qword [rbp-8], rax
-            \\    mov rdi, qword [rbp-8]
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -94,13 +95,14 @@ test "binary op between three signed integers" {
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let a 10)
             \\  (let b 15)
             \\  (let c ({s} a b))
             \\  (let d 20)
-            \\  ({s} c d))
+            \\  ({s} c d)
+            \\  0)
         , .{ op, op });
         var entities = try ra.data.Entities.init(&gpa.allocator);
         var ast = try ra.parse(&gpa.allocator, &entities, source);
@@ -130,7 +132,7 @@ test "binary op between three signed integers" {
             \\    {s} rax, rcx
             \\    sub rsp, 8
             \\    mov qword [rbp-16], rax
-            \\    mov rdi, qword [rbp-16]
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{ instructions[i], instructions[i] });
@@ -145,11 +147,12 @@ test "divide two signed integers" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let x 20)
         \\  (let y 4)
-        \\  (div x y))
+        \\  (div x y)
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -175,7 +178,7 @@ test "divide two signed integers" {
         \\    idiv rcx
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -189,7 +192,7 @@ test "binary op between two signed floats" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let x 10.3)
             \\  (let y 30.5)
@@ -224,7 +227,7 @@ test "binary op between two signed floats" {
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
-            \\    mov rdi, 0
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -242,7 +245,7 @@ test "binary op between signed float and comptime int" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let x 10.3)
             \\  (let y 30)
@@ -277,7 +280,7 @@ test "binary op between signed float and comptime int" {
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
-            \\    mov rdi, 0
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -295,7 +298,7 @@ test "binary op between comptime int and signed float" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let x 10)
             \\  (let y 30.5)
@@ -330,7 +333,7 @@ test "binary op between comptime int and signed float" {
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-8], xmm0
-            \\    mov rdi, 0
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{instructions[i]});
@@ -348,7 +351,7 @@ test "binary op between three signed floats" {
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
-            \\(fn start :args () :ret i64
+            \\(fn start :args () :ret i32
             \\  :body
             \\  (let a 10.3)
             \\  (let b 30.5)
@@ -390,7 +393,7 @@ test "binary op between three signed floats" {
             \\    {s} xmm0, xmm1
             \\    sub rsp, 8
             \\    movsd qword [rbp-16], xmm0
-            \\    mov rdi, 0
+            \\    mov edi, 0
             \\    mov rax, 0x02000001
             \\    syscall
         , .{ instructions[i], instructions[i] });
@@ -405,10 +408,8 @@ test "print a signed integer" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
-        \\  :body
-        \\  (let a 12345)
-        \\  (print a))
+        \\(fn start :args () :ret i32
+        \\  :body (print 12345))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -437,9 +438,9 @@ test "print a signed integer" {
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -450,7 +451,7 @@ test "print three signed integers" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a 10)
         \\  (print a)
@@ -486,23 +487,25 @@ test "print three signed integers" {
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
         \\    mov rsi, 20
+        \\    mov rdi, byte0
+        \\    xor rax, rax
+        \\    sub rsp, 12
+        \\    call _printf
+        \\    add rsp, 12
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov rsi, 30
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rsi, 30
-        \\    mov rdi, byte0
-        \\    xor rax, rax
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-12], eax
+        \\    mov edi, dword [rbp-12]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -512,7 +515,7 @@ test "print a signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const source = "(fn start :args () :ret i64 :body (print 12.345))";
+    const source = "(fn start :args () :ret i32 :body (print 12.345))";
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try ra.parse(&gpa.allocator, &entities, source);
@@ -541,9 +544,9 @@ test "print a signed float" {
         \\    mov rdi, byte0
         \\    mov rax, 1
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -554,7 +557,7 @@ test "print three signed floats" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a 10.2)
         \\  (print a)
@@ -593,23 +596,25 @@ test "print three signed floats" {
         \\    mov rdi, byte0
         \\    mov rax, 1
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
         \\    movsd xmm0, [rel quad_word1]
+        \\    mov rdi, byte0
+        \\    mov rax, 1
+        \\    sub rsp, 12
+        \\    call _printf
+        \\    add rsp, 12
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    movsd xmm0, [rel quad_word2]
         \\    mov rdi, byte0
         \\    mov rax, 1
         \\    sub rsp, 8
         \\    call _printf
         \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    movsd xmm0, [rel quad_word2]
-        \\    mov rdi, byte0
-        \\    mov rax, 1
-        \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-12], eax
+        \\    mov edi, dword [rbp-12]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -620,7 +625,7 @@ test "print string literal" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body (print "hello world"))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -651,9 +656,9 @@ test "print string literal" {
         \\    mov rdi, byte1
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -664,7 +669,7 @@ test "print char literal" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body (print 'a'))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -694,9 +699,9 @@ test "print char literal" {
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     );
@@ -707,10 +712,10 @@ test "user defined function single int" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn square :args ((x i64)) :ret i64
+        \\(fn square :args ((x i32)) :ret i32
         \\  :body (mul x x))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body (square 6))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -731,25 +736,25 @@ test "user defined function single int" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 6
+        \\    mov edi, 6
         \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
         \\label1:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rdi
-        \\    mov rax, qword [rbp-8]
-        \\    imul rax, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rax, qword [rbp-16]
-        \\    add rsp, 16
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], edi
+        \\    mov eax, dword [rbp-4]
+        \\    imul eax, dword [rbp-4]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov eax, dword [rbp-8]
+        \\    add rsp, 8
         \\    pop rbp
         \\    ret
     );
@@ -760,10 +765,10 @@ test "user defined function four ints" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
+        \\(fn slope :args ((x1 i32) (x2 i32) (y1 i32) (y2 i32)) :ret i32
         \\  :body (div (sub y2 y1) (sub x2 x1)))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body (slope 0 10 5 20))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -784,40 +789,40 @@ test "user defined function four ints" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 0
-        \\    mov rsi, 10
-        \\    mov rdx, 5
-        \\    mov rcx, 20
+        \\    mov edi, 0
+        \\    mov esi, 10
+        \\    mov edx, 5
+        \\    mov ecx, 20
         \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
         \\label1:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 32
-        \\    mov qword [rbp-8], rdi
-        \\    mov qword [rbp-16], rsi
-        \\    mov qword [rbp-24], rdx
-        \\    mov qword [rbp-32], rcx
-        \\    mov rax, qword [rbp-32]
-        \\    sub rax, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rax, qword [rbp-16]
-        \\    sub rax, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rax, qword [rbp-40]
-        \\    cqo
-        \\    idiv qword [rbp-48]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-56], rax
-        \\    mov rax, qword [rbp-56]
-        \\    add rsp, 56
+        \\    sub rsp, 16
+        \\    mov dword [rbp-4], edi
+        \\    mov dword [rbp-8], esi
+        \\    mov dword [rbp-12], edx
+        \\    mov dword [rbp-16], ecx
+        \\    mov eax, dword [rbp-16]
+        \\    sub eax, dword [rbp-12]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-20], eax
+        \\    mov eax, dword [rbp-8]
+        \\    sub eax, dword [rbp-4]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-24], eax
+        \\    mov eax, dword [rbp-20]
+        \\    cdq
+        \\    idiv dword [rbp-24]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-28], eax
+        \\    mov eax, dword [rbp-28]
+        \\    add rsp, 28
         \\    pop rbp
         \\    ret
     );
@@ -828,13 +833,13 @@ test "two user defined functions taking ints" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn slope :args ((x1 i64) (x2 i64) (y1 i64) (y2 i64)) :ret i64
+        \\(fn slope :args ((x1 i32) (x2 i32) (y1 i32) (y2 i32)) :ret i32
         \\  :body (div (sub y2 y1) (sub x2 x1)))
         \\
-        \\(fn square :args ((x i64)) :ret i64
+        \\(fn square :args ((x i32)) :ret i32
         \\  :body (mul x x))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a (slope 0 10 5 20))
         \\  (square a))
@@ -857,60 +862,60 @@ test "two user defined functions taking ints" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 0
-        \\    mov rsi, 10
-        \\    mov rdx, 5
-        \\    mov rcx, 20
+        \\    mov edi, 0
+        \\    mov esi, 10
+        \\    mov edx, 5
+        \\    mov ecx, 20
         \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
-        \\    sub rsp, 8
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
+        \\    sub rsp, 12
         \\    call label2
-        \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    add rsp, 12
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov edi, dword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
         \\label1:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 32
-        \\    mov qword [rbp-8], rdi
-        \\    mov qword [rbp-16], rsi
-        \\    mov qword [rbp-24], rdx
-        \\    mov qword [rbp-32], rcx
-        \\    mov rax, qword [rbp-32]
-        \\    sub rax, qword [rbp-24]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-40], rax
-        \\    mov rax, qword [rbp-16]
-        \\    sub rax, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-48], rax
-        \\    mov rax, qword [rbp-40]
-        \\    cqo
-        \\    idiv qword [rbp-48]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-56], rax
-        \\    mov rax, qword [rbp-56]
-        \\    add rsp, 56
+        \\    sub rsp, 16
+        \\    mov dword [rbp-4], edi
+        \\    mov dword [rbp-8], esi
+        \\    mov dword [rbp-12], edx
+        \\    mov dword [rbp-16], ecx
+        \\    mov eax, dword [rbp-16]
+        \\    sub eax, dword [rbp-12]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-20], eax
+        \\    mov eax, dword [rbp-8]
+        \\    sub eax, dword [rbp-4]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-24], eax
+        \\    mov eax, dword [rbp-20]
+        \\    cdq
+        \\    idiv dword [rbp-24]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-28], eax
+        \\    mov eax, dword [rbp-28]
+        \\    add rsp, 28
         \\    pop rbp
         \\    ret
         \\
         \\label2:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rdi
-        \\    mov rax, qword [rbp-8]
-        \\    imul rax, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rax, qword [rbp-16]
-        \\    add rsp, 16
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], edi
+        \\    mov eax, dword [rbp-4]
+        \\    imul eax, dword [rbp-4]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov eax, dword [rbp-8]
+        \\    add rsp, 8
         \\    pop rbp
         \\    ret
     );
@@ -921,10 +926,10 @@ test "call user defined int function twice" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn square :args ((x i64)) :ret i64
+        \\(fn square :args ((x i32)) :ret i32
         \\  :body (mul x x))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a (square 10))
         \\  (let b (square 15))
@@ -948,31 +953,31 @@ test "call user defined int function twice" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 10
+        \\    mov edi, 10
         \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, 15
-        \\    sub rsp, 8
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, 15
+        \\    sub rsp, 12
         \\    call label1
-        \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rdi, qword [rbp-16]
+        \\    add rsp, 12
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov edi, dword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
         \\label1:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rdi
-        \\    mov rax, qword [rbp-8]
-        \\    imul rax, qword [rbp-8]
-        \\    sub rsp, 8
-        \\    mov qword [rbp-16], rax
-        \\    mov rax, qword [rbp-16]
-        \\    add rsp, 16
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], edi
+        \\    mov eax, dword [rbp-4]
+        \\    imul eax, dword [rbp-4]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov eax, dword [rbp-8]
+        \\    add rsp, 8
         \\    pop rbp
         \\    ret
     );
@@ -986,10 +991,10 @@ test "user defined function single float" {
         \\(fn square :args ((x f64)) :ret f64
         \\  :body (mul x x))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a (square 6.4))
-        \\  5)
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -1017,7 +1022,7 @@ test "user defined function single float" {
         \\    call label1
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
-        \\    mov rdi, 5
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -1046,7 +1051,7 @@ test "user defined function two floats" {
         \\(fn mean :args ((x f64) (y f64)) :ret f64
         \\  :body (div (add x y) 2))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a (mean 10 20))
         \\  0)
@@ -1080,7 +1085,7 @@ test "user defined function two floats" {
         \\    call label1
         \\    sub rsp, 8
         \\    movsd qword [rbp-8], xmm0
-        \\    mov rdi, 0
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -1115,11 +1120,11 @@ test "call user defined function float function twice" {
         \\(fn square :args ((x f64)) :ret f64
         \\  :body (mul x x))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a (square 6.4))
         \\  (let b (square 10.4))
-        \\  5)
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -1154,7 +1159,7 @@ test "call user defined function float function twice" {
         \\    add rsp, 8
         \\    sub rsp, 8
         \\    movsd qword [rbp-16], xmm0
-        \\    mov rdi, 5
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
         \\
@@ -1180,12 +1185,12 @@ test "call user defined function with heterogeneous" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn f :args ((x i64) (y f64)) :ret i64
+        \\(fn f :args ((x i32) (y f64)) :ret i32
         \\  :body
         \\  (print x)
         \\  (print y))
         \\
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (f 5 3.4))
     ;
@@ -1205,7 +1210,7 @@ test "call user defined function with heterogeneous" {
         \\
         \\    section .data
         \\
-        \\byte0: db "%ld", 10, 0
+        \\byte0: db "%d", 10, 0
         \\byte1: db "%f", 10, 0
         \\quad_word0: dq 3.4
         \\
@@ -1214,37 +1219,37 @@ test "call user defined function with heterogeneous" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 5
+        \\    mov edi, 5
         \\    movsd xmm1, [rel quad_word0]
         \\    call label1
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
         \\
         \\label1:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    sub rsp, 16
-        \\    mov qword [rbp-8], rdi
-        \\    movsd qword [rbp-16], xmm1
-        \\    mov rsi, qword [rbp-8]
+        \\    sub rsp, 12
+        \\    mov dword [rbp-4], edi
+        \\    movsd qword [rbp-12], xmm1
+        \\    mov esi, dword [rbp-4]
         \\    mov rdi, byte0
         \\    xor rax, rax
+        \\    sub rsp, 4
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    movsd xmm0, qword [rbp-16]
+        \\    add rsp, 4
+        \\    sub rsp, 4
+        \\    mov dword [rbp-16], eax
+        \\    movsd xmm0, qword [rbp-12]
         \\    mov rdi, byte1
         \\    mov rax, 1
-        \\    sub rsp, 8
         \\    call _printf
-        \\    add rsp, 8
-        \\    sub rsp, 8
-        \\    mov qword [rbp-32], rax
-        \\    mov rax, qword [rbp-32]
-        \\    add rsp, 32
+        \\    sub rsp, 4
+        \\    mov dword [rbp-20], eax
+        \\    mov eax, dword [rbp-20]
+        \\    add rsp, 20
         \\    pop rbp
         \\    ret
     );
@@ -1255,7 +1260,7 @@ test "open syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let o-rdonly 0)
         \\  (let fd (open "file.txt" o-rdonly))
@@ -1297,9 +1302,9 @@ test "open syscall" {
         \\    sub rsp, 12
         \\    call _printf
         \\    add rsp, 12
-        \\    sub rsp, 8
-        \\    mov qword [rbp-12], rax
-        \\    mov rdi, qword [rbp-12]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-8], eax
+        \\    mov edi, dword [rbp-8]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1312,11 +1317,12 @@ test "lseek syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let fd 2)
         \\  (let seek-end 2)
-        \\  (lseek fd 0 seek-end))
+        \\  (let size (lseek fd 0 seek-end))
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1342,7 +1348,7 @@ test "lseek syscall" {
         \\    syscall
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1355,11 +1361,12 @@ test "bit-or" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let prot-read 1)
         \\  (let prot-write 2)
-        \\  (bit-or prot-read prot-write))
+        \\  (let prot (bit-or prot-read prot-write))
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1383,7 +1390,7 @@ test "bit-or" {
         \\    or rax, rcx
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1396,12 +1403,11 @@ test "let with explicit type" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let prot-read i32 1)
         \\  (let prot-write i32 2)
-        \\  (let data (bit-or prot-read prot-write))
-        \\  0)
+        \\  (bit-or prot-read prot-write))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1425,7 +1431,7 @@ test "let with explicit type" {
         \\    or eax, ecx
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
-        \\    mov rdi, 0
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1438,7 +1444,7 @@ test "mmap syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let prot-read i32 1)
         \\  (let prot-write i32 2)
@@ -1488,7 +1494,7 @@ test "mmap syscall" {
         \\    syscall
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    mov rdi, 0
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1501,8 +1507,10 @@ test "read syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
-        \\  :body (read -1 null 100))
+        \\(fn start :args () :ret i32
+        \\  :body
+        \\  (let bytes-read (read -1 null 100))
+        \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1528,7 +1536,7 @@ test "read syscall" {
         \\    syscall
         \\    sub rsp, 8
         \\    mov qword [rbp-8], rax
-        \\    mov rdi, qword [rbp-8]
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1541,10 +1549,8 @@ test "close syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
-        \\  :body
-        \\  (close -1)
-        \\  0)
+        \\(fn start :args () :ret i32
+        \\  :body (close -1))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1568,7 +1574,7 @@ test "close syscall" {
         \\    syscall
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
-        \\    mov rdi, 0
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1581,10 +1587,8 @@ test "munmap syscall" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
-        \\  :body
-        \\  (munmap null 0)
-        \\  0)
+        \\(fn start :args () :ret i32
+        \\  :body (munmap null 0))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1609,7 +1613,7 @@ test "munmap syscall" {
         \\    syscall
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
-        \\    mov rdi, 0
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1622,12 +1626,11 @@ test "copying let" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a 5)
         \\  (let b a)
-        \\  (print b)
-        \\  0)
+        \\  (print b))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1655,9 +1658,9 @@ test "copying let" {
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, 0
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1670,12 +1673,11 @@ test "copying typed let" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a 5)
         \\  (let b i32 a)
-        \\  (print b)
-        \\  0)
+        \\  (print b))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     var ast = try ra.parse(allocator, &entities, source);
@@ -1703,9 +1705,9 @@ test "copying typed let" {
         \\    mov rdi, byte0
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-8], rax
-        \\    mov rdi, 0
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1718,7 +1720,7 @@ test "pointer decay" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a "text")
         \\  (let p (ptr u8) a)
@@ -1753,7 +1755,7 @@ test "pointer decay" {
         \\    mov rdi, qword [rbp-8]
         \\    mov sil, byte [rdi]
         \\    mov byte [rbp-9], sil
-        \\    mov rdi, 0
+        \\    mov edi, 0
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1766,7 +1768,7 @@ test "read file contents to buffer" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let o-rdonly 0)
         \\  (let fd (open "/Users/adamkowalski/code/ra/examples/titanic/train.csv" o-rdonly))
@@ -1867,15 +1869,15 @@ test "read file contents to buffer" {
         \\    mov rsi, qword [rbp-36]
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-56], rax
+        \\    sub rsp, 4
+        \\    mov dword [rbp-52], eax
         \\    mov rax, 0x2000049
         \\    mov rdi, qword [rbp-36]
         \\    mov rsi, qword [rbp-12]
         \\    syscall
         \\    sub rsp, 4
-        \\    mov dword [rbp-60], eax
-        \\    mov rdi, qword [rbp-60]
+        \\    mov dword [rbp-56], eax
+        \\    mov edi, dword [rbp-56]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1888,7 +1890,7 @@ test "var binding with 1 set" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (var x 0)
         \\  (set! x 5)
@@ -1911,7 +1913,7 @@ test "var binding with 1 set" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 5
+        \\    mov edi, 5
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1924,7 +1926,7 @@ test "var binding with 2 sets" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (var x 0)
         \\  (set! x 5)
@@ -1948,7 +1950,7 @@ test "var binding with 2 sets" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rdi, 10
+        \\    mov edi, 10
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -1961,7 +1963,7 @@ test "pointer arithmetic" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a "hello")
         \\  (let p (ptr u8) a)
@@ -2002,9 +2004,9 @@ test "pointer arithmetic" {
         \\    mov rsi, qword [rbp-16]
         \\    xor rax, rax
         \\    call _printf
-        \\    sub rsp, 8
-        \\    mov qword [rbp-24], rax
-        \\    mov rdi, qword [rbp-24]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-20], eax
+        \\    mov edi, dword [rbp-20]
         \\    mov rax, 0x02000001
         \\    syscall
     ;
@@ -2017,7 +2019,7 @@ test "equality between two signed integers" {
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a u8 10)
         \\  (let b u8 'a')
@@ -2062,9 +2064,9 @@ test "equality between two signed integers" {
         \\    sub rsp, 14
         \\    call _printf
         \\    add rsp, 14
-        \\    sub rsp, 8
-        \\    mov qword [rbp-10], rax
-        \\    mov rdi, qword [rbp-10]
+        \\    sub rsp, 4
+        \\    mov dword [rbp-6], eax
+        \\    mov edi, dword [rbp-6]
         \\    mov rax, 0x02000001
         \\    syscall
     ;

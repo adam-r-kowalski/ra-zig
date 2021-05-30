@@ -35,9 +35,11 @@ pub const Builtins = enum(Entity) {
     Int,
     I64,
     I32,
+    I8,
     U8,
     Float,
     F64,
+    F32,
     Array,
     Ptr,
     Void,
@@ -114,6 +116,15 @@ fn loadBuiltinEntities(entities: *Entities) !void {
     for ([_]Builtins{ .Type, .Int, .I64, .I32, .U8, .Float, .F64, .Array, .Ptr, .Void }) |entity| {
         try entities.types.putNoClobber(@enumToInt(entity), @enumToInt(Builtins.Type));
     }
+    for ([_]Builtins{ .I64, .F64, .Array, .Ptr }) |entity| {
+        try entities.sizes.putNoClobber(@enumToInt(entity), 8);
+    }
+    for ([_]Builtins{ .I32, .F32 }) |entity| {
+        try entities.sizes.putNoClobber(@enumToInt(entity), 4);
+    }
+    for ([_]Builtins{ .I8, .U8 }) |entity| {
+        try entities.sizes.putNoClobber(@enumToInt(entity), 1);
+    }
     const Null = @enumToInt(Builtins.Null);
     const null_type = entities.next_entity;
     entities.next_entity += 1;
@@ -131,6 +142,7 @@ pub const Entities = struct {
     literals: Map(Entity, InternedString),
     types: Map(Entity, Entity),
     values: Map(Entity, Entity),
+    sizes: Map(Entity, usize),
     overload_index: Map(Entity, usize),
     array_index: Map(Entity, usize),
     pointer_index: Map(Entity, usize),
@@ -152,6 +164,7 @@ pub const Entities = struct {
             .literals = Map(Entity, InternedString).init(&arena.allocator),
             .types = Map(Entity, Entity).init(&arena.allocator),
             .values = Map(Entity, Entity).init(&arena.allocator),
+            .sizes = Map(Entity, usize).init(&arena.allocator),
             .overload_index = Map(Entity, usize).init(&arena.allocator),
             .array_index = Map(Entity, usize).init(&arena.allocator),
             .pointer_index = Map(Entity, usize).init(&arena.allocator),

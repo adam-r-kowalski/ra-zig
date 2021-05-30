@@ -159,7 +159,7 @@ test "brackets" {
 test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(fn start :args () :ret i64 :body 0)";
+    const source = "(fn start :args () :ret i32 :body 0)";
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -173,7 +173,7 @@ test "entry point" {
         \\  (keyword :args)
         \\  (parens)
         \\  (keyword :ret)
-        \\  (symbol i64)
+        \\  (symbol i32)
         \\  (keyword :body)
         \\  (int 0))
     );

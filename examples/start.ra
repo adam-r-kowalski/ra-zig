@@ -1,10 +1,8 @@
-(fn start :args () :ret i64
+(fn f :args ((x i32) (y f64)) :ret i32
   :body
-  (let char1 u8 97)
-  (let char2 'a')
-  (let char3 (equal char1 char2))
-  (let char4 (add char3 48))
-  (print char4)
-  0)
-  
-  
+  (print x)
+  (print y))
+
+
+(fn start :args () :ret i32
+  :body (f 5 3.4))

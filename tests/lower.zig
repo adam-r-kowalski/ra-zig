@@ -6,7 +6,7 @@ test "start" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body 0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -32,7 +32,7 @@ test "start" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return %t0)))
@@ -43,7 +43,7 @@ test "let binding" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let x 0)
         \\  x)
@@ -71,7 +71,7 @@ test "let binding" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return x)))
@@ -82,9 +82,9 @@ test "explicitly typed let" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
-        \\  (let x i64 0)
+        \\  (let x i32 0)
         \\  x)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -110,7 +110,7 @@ test "explicitly typed let" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return x)))
@@ -121,7 +121,7 @@ test "copying let" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let x 0)
         \\  (let y x)
@@ -151,7 +151,7 @@ test "copying let" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (let y x)
@@ -163,10 +163,10 @@ test "copying typed let" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
-        \\  (let x i64 0)
-        \\  (let y i64 x)
+        \\  (let x i32 0)
+        \\  (let y i32 x)
         \\  y)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -193,7 +193,7 @@ test "copying typed let" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (let y x)
@@ -263,7 +263,7 @@ test "conditionals" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn max :args ((x i64) (y i64)) :ret i64
+        \\(fn max :args ((x i32) (y i32)) :ret i32
         \\  :body (if (greater x y) x y))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -298,13 +298,13 @@ test "conditionals" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
         \\    (let %t0 (greater x y))
@@ -326,7 +326,7 @@ test "int literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn sum-of-squares :args ((x i64) (y i64)) :ret i64
+        \\(fn sum-of-squares :args ((x i32) (y i32)) :ret i32
         \\  :body
         \\  (let x2 (pow x 2))
         \\  (let y2 (pow y 2))
@@ -364,13 +364,13 @@ test "int literal" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
         \\    (let x2 (pow x %t0))
@@ -442,7 +442,7 @@ test "string literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let filename "train.csv")
         \\  (open filename))
@@ -471,7 +471,7 @@ test "string literal" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (let %t0 (open filename))
@@ -483,7 +483,7 @@ test "char literal" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (let a 'a')
         \\  0)
@@ -512,7 +512,7 @@ test "char literal" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return %t0)))
@@ -610,7 +610,7 @@ test "var binding with 1 set" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (var x 0)
         \\  (set! x 5)
@@ -640,7 +640,7 @@ test "var binding with 1 set" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return %t0)))
@@ -651,7 +651,7 @@ test "var binding with 2 sets" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const source =
-        \\(fn start :args () :ret i64
+        \\(fn start :args () :ret i32
         \\  :body
         \\  (var x 0)
         \\  (set! x 5)
@@ -683,7 +683,7 @@ test "var binding with 2 sets" {
         \\  :blocks
         \\  (block %b0 :scopes (%external %function %s0)
         \\    :expressions
-        \\    (return i64))
+        \\    (return i32))
         \\  (block %b1 :scopes (%external %function %s1)
         \\    :expressions
         \\    (return %t1)))
