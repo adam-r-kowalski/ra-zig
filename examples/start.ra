@@ -1,8 +1,2 @@
-(fn f :args ((x i32) (y f64)) :ret i32
-  :body
-  (print x)
-  (print y))
-
-
 (fn start :args () :ret i32
-  :body (f 5 3.4))
+  :body (greater 5 3))
