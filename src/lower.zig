@@ -589,7 +589,7 @@ fn writePhi(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const phi = block.phis.items[block.indices.items[block_entity]];
     try output.insertSlice("\n    (let ");
-    try writeName(writer, phi.result_entity);
+    try writeName(writer, phi.phi_entity);
     try output.insertSlice(" (phi ");
     try output.insertFormatted("(%b{} ", .{phi.then_block_index});
     try writeName(writer, phi.then_entity);
