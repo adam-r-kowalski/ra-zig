@@ -113,37 +113,41 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
     active_block.* = else_block_index;
     const else_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[2]);
     assert(children.len == 3);
-    _ = try condition_block.kinds.insert(.Branch);
-    const branch_index = try condition_block.branches.insert(.{
-        .condition_entity = condition_entity,
-        .then_block_index = then_block_index,
-        .else_block_index = else_block_index,
-    });
-    _ = try condition_block.indices.insert(branch_index);
-    const phi_block_id = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
-    const phi_block = &overload.blocks.items[phi_block_id];
+    const phi_block_index = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
+    const phi_block = &overload.blocks.items[phi_block_index];
     _ = try phi_block.kinds.insert(.Phi);
-    const result_entity = entities.next_entity;
+    const phi_entity = entities.next_entity;
     entities.next_entity += 1;
-    _ = try overload.scopes.items[phi_block.active_scopes[phi_block.active_scopes.len - 1]].entities.insert(result_entity);
+    _ = try overload.scopes.items[phi_block.active_scopes[phi_block.active_scopes.len - 1]].entities.insert(phi_entity);
     const phi_index = try phi_block.phis.insert(.{
-        .result_entity = result_entity,
+        .phi_entity = phi_entity,
         .then_block_index = then_block_index,
         .then_entity = then_entity,
         .else_block_index = else_block_index,
         .else_entity = else_entity,
     });
     _ = try phi_block.indices.insert(phi_index);
-    active_block.* = phi_block_id;
+    active_block.* = phi_block_index;
     const then_block = &overload.blocks.items[then_block_index];
     _ = try then_block.kinds.insert(.Jump);
-    const then_jump_index = try then_block.jumps.insert(phi_block_id);
+    const then_jump_index = try then_block.jumps.insert(phi_block_index);
     _ = try then_block.indices.insert(then_jump_index);
     const else_block = &overload.blocks.items[else_block_index];
     _ = try else_block.kinds.insert(.Jump);
-    const else_jump_index = try else_block.jumps.insert(phi_block_id);
+    const else_jump_index = try else_block.jumps.insert(phi_block_index);
     _ = try else_block.indices.insert(else_jump_index);
-    return result_entity;
+    _ = try condition_block.kinds.insert(.Branch);
+    const branch_index = try condition_block.branches.insert(.{
+        .condition_entity = condition_entity,
+        .then_block_index = then_block_index,
+        .then_entity = then_entity,
+        .else_block_index = else_block_index,
+        .else_entity = else_entity,
+        .phi_block_index = phi_block_index,
+        .phi_entity = phi_entity,
+    });
+    _ = try condition_block.indices.insert(branch_index);
+    return phi_entity;
 }
 
 fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children, mutable: bool) !Entity {
@@ -585,7 +589,7 @@ fn writePhi(writer: Writer, block: Block, block_entity: usize) !void {
     const output = writer.output;
     const phi = block.phis.items[block.indices.items[block_entity]];
     try output.insertSlice("\n    (let ");
-    try writeName(writer, phi.result_entity);
+    try writeName(writer, phi.phi_entity);
     try output.insertSlice(" (phi ");
     try output.insertFormatted("(%b{} ", .{phi.then_block_index});
     try writeName(writer, phi.then_entity);

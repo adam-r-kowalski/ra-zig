@@ -38,11 +38,15 @@ pub const Call = struct {
 pub const Branch = struct {
     condition_entity: Entity,
     then_block_index: usize,
+    then_entity: Entity,
     else_block_index: usize,
+    else_entity: Entity,
+    phi_block_index: usize,
+    phi_entity: Entity,
 };
 
 pub const Phi = struct {
-    result_entity: Entity,
+    phi_entity: Entity,
     then_block_index: usize,
     then_entity: Entity,
     else_block_index: usize,
