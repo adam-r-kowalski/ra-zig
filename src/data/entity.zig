@@ -58,6 +58,7 @@ pub const Builtins = enum(Entity) {
     Munmap,
     Read,
     Deref,
+    Greater_query_,
 };
 
 pub const names = blk: {
@@ -75,6 +76,11 @@ pub const names = blk: {
                     if ((field.name.len - 5 > name_index) and std.mem.eql(u8, field.name[name_index .. name_index + 6], "_bang_")) {
                         name[name_index] = '!';
                         name_index += 6;
+                        length += 1;
+                        continue;
+                    } else if ((field.name.len - 6 > name_index) and std.mem.eql(u8, field.name[name_index .. name_index + 7], "_query_")) {
+                        name[name_index] = '?';
+                        name_index += 7;
                         length += 1;
                         continue;
                     } else {

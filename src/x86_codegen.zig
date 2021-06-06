@@ -66,9 +66,9 @@ fn insertUniqueId(ids: *UniqueIds, interned_string: InternedString) !void {
     ids.next_index += 1;
 }
 
-const RegisterSize = enum(u8) { Qword, Dword, Byte };
+const Size = enum(u8) { Qword, Dword, Byte };
 
-fn registerSize(reg: Register) RegisterSize {
+fn registerSize(reg: Register) Size {
     return switch (reg) {
         .Rax, .Rbx, .Rcx, .Rdx, .Rsp, .Rbp, .Rsi, .Rdi, .R8, .R9, .R10, .R11, .R12, .R13, .R14, .R15 => .Qword,
         .Eax, .Ebx, .Ecx, .Edx, .Esp, .Ebp, .Esi, .Edi, .R8d, .R9d, .R10d, .R11d, .R12d, .R13d, .R14d, .R15d => .Dword,
@@ -156,10 +156,18 @@ fn opStackLiteral(context: Context, op: Instruction, offset: usize, literal: Int
     _ = try context.x86_block.operands.insert(operands);
 }
 
-fn opStackImmediate(context: Context, op: Instruction, offset: usize, value: usize) !void {
+fn sizeToKind(size: Size) Kind {
+    return switch (size) {
+        .Qword => .StackOffsetQword,
+        .Dword => .StackOffsetDword,
+        .Byte => .StackOffsetByte,
+    };
+}
+
+fn opStackImmediate(context: Context, op: Instruction, size: Size, offset: usize, value: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
-    operand_kinds[0] = .StackOffsetQword;
+    operand_kinds[0] = sizeToKind(size);
     operand_kinds[1] = .Immediate;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
@@ -172,11 +180,7 @@ fn opRegStack(context: Context, op: Instruction, reg: Register, offset: usize) !
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
     operand_kinds[0] = .Register;
-    switch (registerSize(reg)) {
-        .Qword => operand_kinds[1] = .StackOffsetQword,
-        .Dword => operand_kinds[1] = .StackOffsetDword,
-        .Byte => operand_kinds[1] = .StackOffsetByte,
-    }
+    operand_kinds[1] = sizeToKind(registerSize(reg));
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 2);
     operands[0] = @enumToInt(reg);
@@ -302,15 +306,22 @@ fn restoreStack(context: Context, offset: usize) !void {
     context.stack.top -= offset;
 }
 
+const RegisterAndSize = struct {
+    register: Register,
+    size: Size,
+};
+
 fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, Entity) error{OutOfMemory}!void) !void {
     const branch = context.ir_block.branches.items[context.ir_block.indices.items[branch_index]];
     const type_of = context.entities.types.get(branch.condition_entity).?;
-    const register: Register = switch (type_of) {
-        Int, I64 => .Rax,
-        I32 => .Eax,
-        U8 => .Al,
+    const register_and_size: RegisterAndSize = switch (type_of) {
+        Int, I64 => .{ .register = .Rax, .size = .Qword },
+        I32 => .{ .register = .Eax, .size = .Dword },
+        U8 => .{ .register = .Al, .size = .Byte },
         else => unreachable,
     };
+    const register = register_and_size.register;
+    const size = register_and_size.size;
     if (context.entities.values.get(branch.condition_entity)) |value| {
         try opRegImmediate(context, .Mov, register, value);
         try opRegImmediate(context, .Cmp, register, 0);
@@ -319,7 +330,7 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
         try opRegImmediate(context, .Cmp, register, 0);
     } else {
         const offset = context.stack.entity.get(branch.condition_entity).?;
-        try opStackImmediate(context, .Cmp, offset, 0);
+        try opStackImmediate(context, .Cmp, size, offset, 0);
     }
     const else_x86_block_result = try context.x86.blocks.addOne();
     try opLabel(context, .Je, else_x86_block_result.index);
@@ -595,6 +606,37 @@ fn moveToSseRegister(context: Context, register: SseRegister, entity: Entity) !v
         try opSseRegStack(context, .Movsd, register, offset);
     } else {
         unreachable;
+    }
+}
+
+fn codegenGreaterI32I32(context: Context, call: Call, lhs: Entity, rhs: Entity) !void {
+    try moveToRegister(context, .Eax, lhs);
+    if (context.entities.literals.get(rhs)) |value| {
+        try opRegLiteral(context, .Cmp, .Eax, value);
+    } else if (context.stack.entity.get(rhs)) |offset| {
+        try opRegStack(context, .Cmp, .Eax, offset);
+    } else {
+        unreachable;
+    }
+    try opReg(context, .Setg, .Al);
+    context.stack.top += 1;
+    const offset = context.stack.top;
+    try context.stack.entity.putNoClobber(call.result_entity, offset);
+    try opRegImmediate(context, .Sub, .Rsp, 1);
+    try opStackReg(context, .Mov, offset, .Al);
+    try context.entities.types.putNoClobber(call.result_entity, U8);
+}
+
+fn codegenGreater(context: Context, call: Call) !void {
+    assert(call.argument_entities.len == 2);
+    const lhs = call.argument_entities[0];
+    const rhs = call.argument_entities[1];
+    switch (context.entities.types.get(lhs).?) {
+        Int, I32 => switch (context.entities.types.get(rhs).?) {
+            Int, I32 => try codegenGreaterI32I32(context, call, lhs, rhs),
+            else => unreachable,
+        },
+        else => unreachable,
     }
 }
 
@@ -1208,6 +1250,34 @@ const qword_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
 const dword_registers = [_]Register{ .Edi, .Esi, .Edx, .Ecx, .R8d, .R9d };
 const xmm_registers = [_]SseRegister{ .Xmm0, .Xmm1, .Xmm2, .Xmm3, .Xmm4, .Xmm5 };
 
+fn codegenReturn(context: Context, ret: Entity) !void {
+    const return_type = context.entities.types.get(ret).?;
+    if (context.stack.entity.get(ret)) |offset| {
+        switch (return_type) {
+            I64 => try opRegStack(context, .Mov, .Rax, offset),
+            I32 => try opRegStack(context, .Mov, .Eax, offset),
+            F64 => try opSseRegStack(context, .Movsd, .Xmm0, offset),
+            else => unreachable,
+        }
+    } else if (context.entities.literals.get(ret)) |value| {
+        switch (return_type) {
+            I64 => try opRegLiteral(context, .Mov, .Rax, value),
+            F64 => {
+                try insertUniqueId(&context.x86.quad_words, value);
+                try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
+            },
+            else => unreachable,
+        }
+    } else {
+        unreachable;
+    }
+    if (context.stack.top > 0) {
+        try opRegImmediate(context, .Add, .Rsp, context.stack.top);
+    }
+    try opReg(context, .Pop, .Rbp);
+    try opNoArgs(context.x86_block, .Ret);
+}
+
 fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
     const name = context.entities.names.get(call.function_entity).?;
@@ -1227,6 +1297,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Read) => try codegenRead(context, call),
         @enumToInt(Builtins.Ptr) => try codegenPtr(context, call),
         @enumToInt(Builtins.Deref) => try codegenDeref(context, call),
+        @enumToInt(Builtins.Greater_query_) => try codegenGreater(context, call),
         else => {
             const index = context.ir.name_to_index.get(name).?;
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
@@ -1330,32 +1401,10 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     switch (expression_kind) {
                         .Return => {
                             const ret = overload_context.ir_block.returns.items[overload_context.ir_block.indices.items[i]];
-                            if (stack.entity.get(ret)) |offset| {
-                                switch (return_type) {
-                                    I64 => try opRegStack(overload_context, .Mov, .Rax, offset),
-                                    I32 => try opRegStack(overload_context, .Mov, .Eax, offset),
-                                    F64 => try opSseRegStack(overload_context, .Movsd, .Xmm0, offset),
-                                    else => unreachable,
-                                }
-                            } else if (context.entities.literals.get(ret)) |value| {
-                                switch (return_type) {
-                                    I64 => try opRegLiteral(overload_context, .Mov, .Rax, value),
-                                    F64 => {
-                                        try insertUniqueId(&context.x86.quad_words, value);
-                                        try opSseRegRelQuadWord(context, .Movsd, .Xmm0, value);
-                                    },
-                                    else => unreachable,
-                                }
-                            } else {
-                                unreachable;
-                            }
-                            if (overload_context.stack.top > 0) {
-                                try opRegImmediate(overload_context, .Add, .Rsp, overload_context.stack.top);
-                            }
-                            try opReg(overload_context, .Pop, .Rbp);
-                            try opNoArgs(x86_block, .Ret);
+                            try codegenReturn(overload_context, ret);
                         },
                         .Call => try codegenCall(overload_context, i),
+                        .Branch => try codegenBranch(overload_context, i, codegenReturn),
                         else => unreachable,
                     }
                 }
@@ -1503,10 +1552,12 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Divsd => try output.insertSlice("divsd"),
         .Xor => try output.insertSlice("xor"),
         .Or => try output.insertSlice("or"),
+        .And => try output.insertSlice("and"),
         .Cmp => try output.insertSlice("cmp"),
         .Je => try output.insertSlice("je"),
         .Jmp => try output.insertSlice("jmp"),
         .Sete => try output.insertSlice("sete"),
+        .Setg => try output.insertSlice("setg"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),
         .Cqo => try output.insertSlice("cqo"),

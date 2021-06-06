@@ -2123,3 +2123,52 @@ test "conditional" {
     expectEqualStrings(x86_string.slice(), expected);
     x86_string.deinit();
 }
+
+test "max" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn max :args ((x i32) (y i32)) :ret i32
+        \\  :body (if (greater? x y) x y))
+        \\
+        \\(fn start :args () :ret i32
+        \\  :body (max 5 7))
+    ;
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try ra.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try ra.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 1
+        \\    cmp rax, 0
+        \\    je label1
+        \\    mov rax, 5
+        \\    jmp label2
+        \\
+        \\label1:
+        \\    mov rax, 7
+        \\    jmp label2
+        \\
+        \\label2:
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}

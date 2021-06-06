@@ -1,2 +1,8 @@
+(fn max :args ((x i32) (y i32)) :ret i32
+  :body (if (greater? x y) x y))
+
+(fn square :args ((x i32)) :ret i32
+  :body (mul x x))
+
 (fn start :args () :ret i32
-  :body (greater 5 3))
+  :body (print (square (max 7 15))))
