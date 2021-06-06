@@ -1,11 +1,11 @@
-(fn readtill :args ((buffer (ptr u8)) (target u8) (times u64)) :ret (ptr u8)
+(fn readtill :args ((mut buffer (ptr u8)) (target u8) (mut times u64)) :ret (ptr u8)
   :body
   (loop
     (let current (deref buffer))
-    (inc! buffer)
-    (when (equal current target)
-      (dec! times)
-      (when (zero? times) (return buffer)))))
+    (set! buffer (+ buffer 1))
+    (when (= current target)
+      (set! times (- times 1))
+      (when (= 0 times) (return buffer)))))
 
 (let blk (struct :ptr (ptr u8) :len u64))
 
@@ -21,7 +21,7 @@
   (close fd)
   (blk data len))
   
-(fn classify :args ((buffer (ptr u8))) :ret f32
+(fn classify :args ((mut buffer (ptr u8))) :ret f32
   :body
   (var correct 0.0)
   (var total 0.0)
@@ -29,13 +29,13 @@
   (loop
     (inc! total)
     (set! buffer (readtill buffer ',' 1))
-    (let alive (equal (deref buffer) '1'))
+    (let alive (= (deref buffer) '1'))
     (set! buffer (readtill buffer ',' 4))
-    (let male (equal (deref buffer) 'm'))
+    (let male (= (deref buffer) 'm'))
     (set! buffer (readtill buffer '\n' 1))
-    (add! correct (or (and male (not alive)) (and (not male) alive)))
-    (when (equal (deref buffer) '\0') (break)))
-  (div correct total))
+    (set! correct (+ correct (or (and male (not alive)) (and (not male) alive))))
+    (when (= (deref buffer) '\0') (break)))
+  (/ correct total))
 
 (fn start :args () :ret i64
   :body

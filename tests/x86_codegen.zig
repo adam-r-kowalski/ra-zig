@@ -43,7 +43,7 @@ test "binary op between two signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul" };
+    const ops = [_][]const u8{ "+", "-", "*" };
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -91,7 +91,7 @@ test "binary op between three signed integers" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul" };
+    const ops = [_][]const u8{ "+", "-", "*" };
     const instructions = [_][]const u8{ "add", "sub", "imul" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -151,7 +151,7 @@ test "divide two signed integers" {
         \\  :body
         \\  (let x 20)
         \\  (let y 4)
-        \\  (div x y)
+        \\  (/ x y)
         \\  0)
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -188,7 +188,7 @@ test "binary op between two signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -241,7 +241,7 @@ test "binary op between signed float and comptime int" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -294,7 +294,7 @@ test "binary op between comptime int and signed float" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -347,7 +347,7 @@ test "binary op between three signed floats" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.testing.expect(!gpa.deinit());
     const allocator = &gpa.allocator;
-    const ops = [_][]const u8{ "add", "sub", "mul", "div" };
+    const ops = [_][]const u8{ "+", "-", "*", "/" };
     const instructions = [_][]const u8{ "addsd", "subsd", "mulsd", "divsd" };
     for (ops) |op, i| {
         const source = try std.fmt.allocPrint(allocator,
@@ -713,7 +713,7 @@ test "user defined function single int" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x i32)) :ret i32
-        \\  :body (mul x x))
+        \\  :body (* x x))
         \\
         \\(fn start :args () :ret i32
         \\  :body (square 6))
@@ -766,7 +766,7 @@ test "user defined function four ints" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn slope :args ((x1 i32) (x2 i32) (y1 i32) (y2 i32)) :ret i32
-        \\  :body (div (sub y2 y1) (sub x2 x1)))
+        \\  :body (/ (- y2 y1) (- x2 x1)))
         \\
         \\(fn start :args () :ret i32
         \\  :body (slope 0 10 5 20))
@@ -834,10 +834,10 @@ test "two user defined functions taking ints" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn slope :args ((x1 i32) (x2 i32) (y1 i32) (y2 i32)) :ret i32
-        \\  :body (div (sub y2 y1) (sub x2 x1)))
+        \\  :body (/ (- y2 y1) (- x2 x1)))
         \\
         \\(fn square :args ((x i32)) :ret i32
-        \\  :body (mul x x))
+        \\  :body (* x x))
         \\
         \\(fn start :args () :ret i32
         \\  :body
@@ -927,7 +927,7 @@ test "call user defined int function twice" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x i32)) :ret i32
-        \\  :body (mul x x))
+        \\  :body (* x x))
         \\
         \\(fn start :args () :ret i32
         \\  :body
@@ -989,7 +989,7 @@ test "user defined function single float" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x f64)) :ret f64
-        \\  :body (mul x x))
+        \\  :body (* x x))
         \\
         \\(fn start :args () :ret i32
         \\  :body
@@ -1049,7 +1049,7 @@ test "user defined function two floats" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn mean :args ((x f64) (y f64)) :ret f64
-        \\  :body (div (add x y) 2))
+        \\  :body (/ (+ x y) 2))
         \\
         \\(fn start :args () :ret i32
         \\  :body
@@ -1118,7 +1118,7 @@ test "call user defined function float function twice" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn square :args ((x f64)) :ret f64
-        \\  :body (mul x x))
+        \\  :body (* x x))
         \\
         \\(fn start :args () :ret i32
         \\  :body
@@ -1967,7 +1967,7 @@ test "pointer arithmetic" {
         \\  :body
         \\  (let a "hello")
         \\  (let p (ptr u8) a)
-        \\  (let p2 (add p 1))
+        \\  (let p2 (+ p 1))
         \\  (print p2))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -2023,8 +2023,8 @@ test "equality between two signed integers" {
         \\  :body
         \\  (let a u8 10)
         \\  (let b u8 'a')
-        \\  (let c (equal a b))
-        \\  (let d (add c 48))
+        \\  (let c (= a b))
+        \\  (let d (+ c 48))
         \\  (print d))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
@@ -2130,7 +2130,7 @@ test "max" {
     const allocator = &gpa.allocator;
     const source =
         \\(fn max :args ((x i32) (y i32)) :ret i32
-        \\  :body (if (greater? x y) x y))
+        \\  :body (if (> x y) x y))
         \\
         \\(fn start :args () :ret i32
         \\  :body (max 5 7))
@@ -2152,22 +2152,41 @@ test "max" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rax, 1
-        \\    cmp rax, 0
-        \\    je label1
-        \\    mov rax, 5
-        \\    jmp label2
-        \\
-        \\label1:
-        \\    mov rax, 7
-        \\    jmp label2
-        \\
-        \\label2:
+        \\    mov edi, 5
+        \\    mov esi, 7
+        \\    call label1
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
         \\    mov rax, 0x02000001
         \\    syscall
+        \\
+        \\label1:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    sub rsp, 8
+        \\    mov dword [rbp-4], edi
+        \\    mov dword [rbp-8], esi
+        \\    mov eax, dword [rbp-4]
+        \\    cmp eax, dword [rbp-8]
+        \\    setg al
+        \\    sub rsp, 1
+        \\    mov byte [rbp-9], al
+        \\    cmp byte [rbp-9], 0
+        \\    je label2
+        \\    mov eax, dword [rbp-4]
+        \\    jmp label3
+        \\
+        \\label2:
+        \\    mov eax, dword [rbp-8]
+        \\    jmp label3
+        \\
+        \\label3:
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov eax, dword [rbp-4]
+        \\    pop rbp
+        \\    ret
     ;
     expectEqualStrings(x86_string.slice(), expected);
     x86_string.deinit();

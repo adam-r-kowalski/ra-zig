@@ -1282,11 +1282,11 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     const call = context.ir_block.calls.items[context.ir_block.indices.items[call_index]];
     const name = context.entities.names.get(call.function_entity).?;
     switch (name) {
-        @enumToInt(Builtins.Add) => try codegenBinaryOp(context, call, AddOps),
-        @enumToInt(Builtins.Sub) => try codegenBinaryOp(context, call, SubOps),
-        @enumToInt(Builtins.Mul) => try codegenBinaryOp(context, call, MulOps),
-        @enumToInt(Builtins.Div) => try codegenDivide(context, call),
-        @enumToInt(Builtins.Equal) => try codegenEqual(context, call),
+        @enumToInt(Builtins._add_) => try codegenBinaryOp(context, call, AddOps),
+        @enumToInt(Builtins._sub_) => try codegenBinaryOp(context, call, SubOps),
+        @enumToInt(Builtins._mul_) => try codegenBinaryOp(context, call, MulOps),
+        @enumToInt(Builtins._div_) => try codegenDivide(context, call),
+        @enumToInt(Builtins._eql_) => try codegenEqual(context, call),
         @enumToInt(Builtins.Bit_Or) => try codegenBitOr(context, call),
         @enumToInt(Builtins.Print) => try codegenPrint(context, call),
         @enumToInt(Builtins.Open) => try codegenOpen(context, call),
@@ -1297,9 +1297,27 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
         @enumToInt(Builtins.Read) => try codegenRead(context, call),
         @enumToInt(Builtins.Ptr) => try codegenPtr(context, call),
         @enumToInt(Builtins.Deref) => try codegenDeref(context, call),
-        @enumToInt(Builtins.Greater_query_) => try codegenGreater(context, call),
+        @enumToInt(Builtins._greater_) => try codegenGreater(context, call),
         else => {
-            const index = context.ir.name_to_index.get(name).?;
+            const index = lbl: {
+                if (context.ir.name_to_index.get(name)) |i| {
+                    break :lbl i;
+                } else {
+                    const literal = context.entities.interned_strings.data.items[name];
+                    std.debug.print(
+                        \\
+                        \\
+                        \\
+                        \\-- NAMING ERROR ------------------------
+                        \\
+                        \\Cannot find function `{s}`
+                        \\
+                        \\
+                        \\
+                    , .{literal});
+                    unreachable;
+                }
+            };
             assert(context.ir.kinds.items[index] == DeclarationKind.Function);
             const function = &context.ir.functions.items[context.ir.indices.items[index]];
             assert(function.overloads.length == 1);

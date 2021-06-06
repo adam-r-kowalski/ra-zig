@@ -44,11 +44,11 @@ pub const Builtins = enum(Entity) {
     Ptr,
     Void,
     Null,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Equal,
+    _add_,
+    _sub_,
+    _mul_,
+    _div_,
+    _eql_,
     Bit_Or,
     Print,
     Open,
@@ -58,7 +58,7 @@ pub const Builtins = enum(Entity) {
     Munmap,
     Read,
     Deref,
-    Greater_query_,
+    _greater_,
 };
 
 pub const names = blk: {
@@ -73,14 +73,35 @@ pub const names = blk: {
             switch (c) {
                 'A'...'Z' => name[name_index] = std.ascii.toLower(c),
                 '_' => {
-                    if ((field.name.len - 5 > name_index) and std.mem.eql(u8, field.name[name_index .. name_index + 6], "_bang_")) {
+                    if ((field.name.len > name_index + 8) and std.mem.eql(u8, field.name[name_index .. name_index + 9], "_greater_")) {
+                        name[name_index] = '>';
+                        name_index += 9;
+                        length += 1;
+                        continue;
+                    } else if ((field.name.len > name_index + 5) and std.mem.eql(u8, field.name[name_index .. name_index + 6], "_bang_")) {
                         name[name_index] = '!';
                         name_index += 6;
                         length += 1;
                         continue;
-                    } else if ((field.name.len - 6 > name_index) and std.mem.eql(u8, field.name[name_index .. name_index + 7], "_query_")) {
-                        name[name_index] = '?';
-                        name_index += 7;
+                    } else if ((field.name.len > name_index + 4)) {
+                        const slice = field.name[name_index .. name_index + 5];
+                        if (std.mem.eql(u8, slice, "_add_")) {
+                            name[name_index] = '+';
+                        } else if (std.mem.eql(u8, slice, "_sub_")) {
+                            name[name_index] = '-';
+                        } else if (std.mem.eql(u8, slice, "_mul_")) {
+                            name[name_index] = '*';
+                        } else if (std.mem.eql(u8, slice, "_div_")) {
+                            name[name_index] = '/';
+                        } else if (std.mem.eql(u8, slice, "_eql_")) {
+                            name[name_index] = '=';
+                        } else {
+                            name[name_index] = '-';
+                            name_index += 1;
+                            length += 1;
+                            continue;
+                        }
+                        name_index += 5;
                         length += 1;
                         continue;
                     } else {

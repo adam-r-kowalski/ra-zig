@@ -206,7 +206,7 @@ test "compound expressions" {
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn distance :args ((x f64) (y f64)) :ret f64
-        \\  :body (sqrt (add (pow x 2) (pow y 2))))
+        \\  :body (sqrt (+ (^ x 2) (^ y 2))))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -225,7 +225,7 @@ test "compound expressions" {
         \\  :scopes
         \\  (scope %external
         \\    (entity :name sqrt)
-        \\    (entity :name pow))
+        \\    (entity :name ^))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -251,9 +251,9 @@ test "compound expressions" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (let %t1 (pow x %t0))
-        \\    (let %t3 (pow y %t2))
-        \\    (let %t4 (add %t1 %t3))
+        \\    (let %t1 (^ x %t0))
+        \\    (let %t3 (^ y %t2))
+        \\    (let %t4 (+ %t1 %t3))
         \\    (let %t5 (sqrt %t4))
         \\    (return %t5)))
     );
@@ -328,9 +328,9 @@ test "int literal" {
     const source =
         \\(fn sum-of-squares :args ((x i32) (y i32)) :ret i32
         \\  :body
-        \\  (let x2 (pow x 2))
-        \\  (let y2 (pow y 2))
-        \\  (add x2 y2))
+        \\  (let x2 (^ x 2))
+        \\  (let y2 (^ y 2))
+        \\  (+ x2 y2))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -348,7 +348,7 @@ test "int literal" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name pow))
+        \\    (entity :name ^))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -373,9 +373,9 @@ test "int literal" {
         \\    (return i32))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (let x2 (pow x %t0))
-        \\    (let y2 (pow y %t1))
-        \\    (let %t2 (add x2 y2))
+        \\    (let x2 (^ x %t0))
+        \\    (let y2 (^ y %t1))
+        \\    (let %t2 (+ x2 y2))
         \\    (return %t2)))
     );
 }
@@ -386,9 +386,9 @@ test "float literal" {
     const source =
         \\(fn sum-of-squares :args ((x f64) (y f64)) :ret f64
         \\  :body
-        \\  (let x2 (pow x 2.0))
-        \\  (let y2 (pow y 2.0))
-        \\  (add x2 y2))
+        \\  (let x2 (^ x 2.0))
+        \\  (let y2 (^ y 2.0))
+        \\  (+ x2 y2))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -406,7 +406,7 @@ test "float literal" {
         \\  :body-block %b3
         \\  :scopes
         \\  (scope %external
-        \\    (entity :name pow))
+        \\    (entity :name ^))
         \\  (scope %function
         \\    (entity :name x)
         \\    (entity :name y))
@@ -431,9 +431,9 @@ test "float literal" {
         \\    (return f64))
         \\  (block %b3 :scopes (%external %function %s3)
         \\    :expressions
-        \\    (let x2 (pow x %t0))
-        \\    (let y2 (pow y %t1))
-        \\    (let %t2 (add x2 y2))
+        \\    (let x2 (^ x %t0))
+        \\    (let y2 (^ y %t1))
+        \\    (let %t2 (+ x2 y2))
         \\    (return %t2)))
     );
 }
@@ -524,10 +524,10 @@ test "overloading" {
     defer std.testing.expect(!gpa.deinit());
     const source =
         \\(fn area :args ((c circle)) :ret f64
-        \\  :body (mul pi (pow (radius c) 2)))
+        \\  :body (* pi (^ (radius c) 2)))
         \\
         \\(fn area :args ((r rectangle)) :ret f64
-        \\  :body (mul (width r) (height r)))
+        \\  :body (* (width r) (height r)))
     ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
@@ -547,7 +547,7 @@ test "overloading" {
         \\  (scope %external
         \\    (entity :name circle)
         \\    (entity :name pi)
-        \\    (entity :name pow)
+        \\    (entity :name ^)
         \\    (entity :name radius))
         \\  (scope %function
         \\    (entity :name c))
@@ -568,8 +568,8 @@ test "overloading" {
         \\  (block %b2 :scopes (%external %function %s2)
         \\    :expressions
         \\    (let %t0 (radius c))
-        \\    (let %t2 (pow %t0 %t1))
-        \\    (let %t3 (mul pi %t2))
+        \\    (let %t2 (^ %t0 %t1))
+        \\    (let %t3 (* pi %t2))
         \\    (return %t3)))
         \\
         \\(fn area
@@ -601,7 +601,7 @@ test "overloading" {
         \\    :expressions
         \\    (let %t0 (width r))
         \\    (let %t1 (height r))
-        \\    (let %t2 (mul %t0 %t1))
+        \\    (let %t2 (* %t0 %t1))
         \\    (return %t2)))
     );
 }

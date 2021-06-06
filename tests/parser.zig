@@ -116,7 +116,7 @@ test "string" {
 test "parens" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(add 3 7 (mul 9 5))";
+    const source = "(+ 3 7 (* 9 5))";
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -125,11 +125,11 @@ test "parens" {
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
         \\(parens
-        \\  (symbol add)
+        \\  (symbol +)
         \\  (int 3)
         \\  (int 7)
         \\  (parens
-        \\    (symbol mul)
+        \\    (symbol *)
         \\    (int 9)
         \\    (int 5)))
     );
