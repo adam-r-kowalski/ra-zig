@@ -100,6 +100,8 @@ pub const Instruction = enum(u8) {
     Xor,
     Or,
     Cmp,
+    Je,
+    Jmp,
     Sete,
     Call,
     Syscall,

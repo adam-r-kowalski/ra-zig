@@ -156,6 +156,18 @@ fn opStackLiteral(context: Context, op: Instruction, offset: usize, literal: Int
     _ = try context.x86_block.operands.insert(operands);
 }
 
+fn opStackImmediate(context: Context, op: Instruction, offset: usize, value: usize) !void {
+    _ = try context.x86_block.instructions.insert(op);
+    const operand_kinds = try context.allocator.alloc(Kind, 2);
+    operand_kinds[0] = .StackOffsetQword;
+    operand_kinds[1] = .Immediate;
+    _ = try context.x86_block.operand_kinds.insert(operand_kinds);
+    const operands = try context.allocator.alloc(usize, 2);
+    operands[0] = offset;
+    operands[1] = value;
+    _ = try context.x86_block.operands.insert(operands);
+}
+
 fn opRegStack(context: Context, op: Instruction, reg: Register, offset: usize) !void {
     _ = try context.x86_block.instructions.insert(op);
     const operand_kinds = try context.allocator.alloc(Kind, 2);
@@ -290,25 +302,111 @@ fn restoreStack(context: Context, offset: usize) !void {
     context.stack.top -= offset;
 }
 
-// fn codegenBranch(context: Context, branch_index: usize) !void {
-//     const branch = context.ir_block.branches.items[context.ir_block.indices.items[branch_index]];
-//     const type_of = context.entities.types.get(branch.condition_entity).?;
-//     switch (type_of) {
-//         Int, I64 => {
-//             if (context.entities.values.get(branch.condition_entity)) |value| {
-//                 try opRegImmediate(context, .Mov, .Rax, value);
-//                 try opRegImmediate(context, .Cmp, .Rax, 0);
-//             } else if (context.entities.literals.get(branch.condition_entity)) |literal| {
-//                 try opRegLiteral(context, .Mov, .Rax, literal);
-//                 try opRegImmediate(context, .Cmp, .Rax, 0);
-//             } else {
-//                 const offset = context.stack.entity.get(branch.condition_entity).?;
-//                 try opStackImmediate(context, .Cmp, offset, 0);
-//             }
-//         },
-//         else => unreachable,
-//     }
-// }
+fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, Entity) error{OutOfMemory}!void) !void {
+    const branch = context.ir_block.branches.items[context.ir_block.indices.items[branch_index]];
+    const type_of = context.entities.types.get(branch.condition_entity).?;
+    const register: Register = switch (type_of) {
+        Int, I64 => .Rax,
+        I32 => .Eax,
+        U8 => .Al,
+        else => unreachable,
+    };
+    if (context.entities.values.get(branch.condition_entity)) |value| {
+        try opRegImmediate(context, .Mov, register, value);
+        try opRegImmediate(context, .Cmp, register, 0);
+    } else if (context.entities.literals.get(branch.condition_entity)) |literal| {
+        try opRegLiteral(context, .Mov, register, literal);
+        try opRegImmediate(context, .Cmp, register, 0);
+    } else {
+        const offset = context.stack.entity.get(branch.condition_entity).?;
+        try opStackImmediate(context, .Cmp, offset, 0);
+    }
+    const else_x86_block_result = try context.x86.blocks.addOne();
+    try opLabel(context, .Je, else_x86_block_result.index);
+    const else_x86_block = else_x86_block_result.ptr;
+    else_x86_block.instructions = List(Instruction).init(context.allocator);
+    else_x86_block.operand_kinds = List([]const Kind).init(context.allocator);
+    else_x86_block.operands = List([]const usize).init(context.allocator);
+    var else_stack = context.stack.*;
+    const else_context = Context{
+        .allocator = context.allocator,
+        .overload = context.overload,
+        .x86 = context.x86,
+        .x86_block = else_x86_block,
+        .ir = context.ir,
+        .ir_block = &context.overload.blocks.items[branch.else_block_index],
+        .stack = &else_stack,
+        .entities = context.entities,
+    };
+    const phi_x86_block_result = try context.x86.blocks.addOne();
+    const phi_x86_block = phi_x86_block_result.ptr;
+    phi_x86_block.instructions = List(Instruction).init(context.allocator);
+    phi_x86_block.operand_kinds = List([]const Kind).init(context.allocator);
+    phi_x86_block.operands = List([]const usize).init(context.allocator);
+    for (context.overload.blocks.items[branch.then_block_index].kinds.slice()) |expression_kind, i| {
+        switch (expression_kind) {
+            .Call => try codegenCall(context, i),
+            .Jump => {
+                try moveToRegister(context, .Rax, branch.then_entity);
+                try opLabel(context, .Jmp, phi_x86_block_result.index);
+            },
+            else => unreachable,
+        }
+    }
+    for (else_context.ir_block.kinds.slice()) |expression_kind, i| {
+        switch (expression_kind) {
+            .Call => try codegenCall(else_context, i),
+            .Jump => {
+                try moveToRegister(else_context, .Rax, branch.else_entity);
+                try opLabel(else_context, .Jmp, phi_x86_block_result.index);
+            },
+            else => unreachable,
+        }
+    }
+    var phi_stack = context.stack.*;
+    const phi_context = Context{
+        .allocator = context.allocator,
+        .overload = context.overload,
+        .x86 = context.x86,
+        .x86_block = phi_x86_block,
+        .ir = context.ir,
+        .ir_block = &context.overload.blocks.items[branch.phi_block_index],
+        .stack = &phi_stack,
+        .entities = context.entities,
+    };
+    for (phi_context.ir_block.kinds.slice()) |expression_kind, i| {
+        switch (expression_kind) {
+            .Call => try codegenCall(phi_context, i),
+            .Phi => {
+                const phi_index = phi_context.ir_block.indices.items[i];
+                const phi = phi_context.ir_block.phis.items[phi_context.ir_block.indices.items[phi_index]];
+                const phi_type = phi_context.entities.types.get(phi.then_entity).?;
+                assert(phi_type == phi_context.entities.types.get(phi.else_entity).?);
+                switch (phi_type) {
+                    Int, I64 => {
+                        phi_context.stack.top += 8;
+                        const offset = phi_context.stack.top;
+                        try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
+                        try opRegImmediate(phi_context, .Sub, .Rsp, 8);
+                        try opStackReg(phi_context, .Mov, offset, .Rax);
+                        try phi_context.entities.types.putNoClobber(phi.phi_entity, phi_type);
+                    },
+                    I32 => {
+                        phi_context.stack.top += 4;
+                        const offset = phi_context.stack.top;
+                        try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
+                        try opRegImmediate(phi_context, .Sub, .Rsp, 4);
+                        try opStackReg(phi_context, .Mov, offset, .Eax);
+                        try phi_context.entities.types.putNoClobber(phi.phi_entity, phi_type);
+                    },
+                    else => unreachable,
+                }
+            },
+            .Return => try onReturn(phi_context, branch.phi_entity),
+            else => unreachable,
+        }
+    }
+}
 
 fn codegenPrintI64(context: Context, call: Call) !void {
     try moveToRegister(context, .Rsi, call.argument_entities[0]);
@@ -1305,6 +1403,20 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
     }
 }
 
+fn codegenSysExit(context: Context, ret: Entity) !void {
+    assert(context.entities.types.get(ret).? == I32 or context.entities.types.get(ret).? == Int);
+    if (context.stack.entity.get(ret)) |offset| {
+        try opRegStack(context, .Mov, .Edi, offset);
+    } else if (context.entities.literals.get(ret)) |value| {
+        try opRegLiteral(context, .Mov, .Edi, value);
+    } else {
+        unreachable;
+    }
+    const sys_exit = try internString(context.entities, "0x02000001");
+    try opRegLiteral(context, .Mov, .Rax, sys_exit);
+    try opNoArgs(context.x86_block, .Syscall);
+}
+
 fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
     const name = entities.interned_strings.mapping.get("start").?;
     const index = ir.name_to_index.get(name).?;
@@ -1323,7 +1435,7 @@ fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
         .entity = Map(Entity, usize).init(allocator),
         .top = 0,
     };
-    const context = Context{
+    var context = Context{
         .allocator = allocator,
         .overload = overload,
         .x86 = x86,
@@ -1335,27 +1447,19 @@ fn codegenStart(x86: *X86, entities: *Entities, ir: Ir) !void {
     };
     try opReg(context, .Push, .Rbp);
     try opRegReg(context, .Mov, .Rbp, .Rsp);
-    for (context.ir_block.kinds.slice()) |expression_kind, i| {
+    const kinds = context.ir_block.kinds.slice();
+
+    for (kinds) |expression_kind, i| {
         switch (expression_kind) {
             .Return => {
                 const ret = context.ir_block.returns.items[context.ir_block.indices.items[i]];
-                assert(entities.types.get(ret).? == I32 or entities.types.get(ret).? == Int);
-                if (stack.entity.get(ret)) |offset| {
-                    try opRegStack(context, .Mov, .Edi, offset);
-                } else if (context.entities.literals.get(ret)) |value| {
-                    try opRegLiteral(context, .Mov, .Edi, value);
-                } else {
-                    unreachable;
-                }
-                const sys_exit = try internString(entities, "0x02000001");
-                try opRegLiteral(context, .Mov, .Rax, sys_exit);
-                try opNoArgs(x86_block, .Syscall);
+                try codegenSysExit(context, ret);
             },
             .Call => try codegenCall(context, i),
             .TypedLet => try codegenTypedLet(context, i),
             .CopyingLet => try codegenCopyingLet(context, i),
             .CopyingTypedLet => try codegenCopyingTypedLet(context, i),
-            // .Branch => try codegenBranch(context, i),
+            .Branch => try codegenBranch(context, i, codegenSysExit),
             else => unreachable,
         }
     }
@@ -1400,6 +1504,8 @@ fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
         .Xor => try output.insertSlice("xor"),
         .Or => try output.insertSlice("or"),
         .Cmp => try output.insertSlice("cmp"),
+        .Je => try output.insertSlice("je"),
+        .Jmp => try output.insertSlice("jmp"),
         .Sete => try output.insertSlice("sete"),
         .Call => try output.insertSlice("call"),
         .Syscall => try output.insertSlice("syscall"),

@@ -2074,58 +2074,52 @@ test "equality between two signed integers" {
     x86_string.deinit();
 }
 
-// test "conditional" {
-//     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     defer std.testing.expect(!gpa.deinit());
-//     const allocator = &gpa.allocator;
-//     const source =
-//         \\(fn start :args () :ret i32
-//         \\  :body
-//         \\  (if 1 x y))
-//     ;
-//     var entities = try ra.data.Entities.init(&gpa.allocator);
-//     var ast = try ra.parse(allocator, &entities, source);
-//     var ir = try ra.lower(allocator, &entities, ast);
-//     ast.deinit();
-//     var x86 = try ra.codegen(allocator, &entities, ir);
-//     ir.deinit();
-//     var x86_string = try ra.x86String(allocator, x86, entities);
-//     entities.deinit();
-//     x86.deinit();
-//     const expected =
-//         \\    global _main
-//         \\    extern _printf
-//         \\
-//         \\    section .data
-//         \\
-//         \\byte0: db "%c", 10, 0
-//         \\
-//         \\    section .text
-//         \\
-//         \\_main:
-//         \\    push rbp
-//         \\    mov rbp, rsp
-//         \\    mov al, 10
-//         \\    cmp al, 97
-//         \\    sete al
-//         \\    sub rsp, 1
-//         \\    mov byte [rbp-1], al
-//         \\    mov al, byte [rbp-1]
-//         \\    add al, 48
-//         \\    sub rsp, 1
-//         \\    mov byte [rbp-2], al
-//         \\    mov sil, byte [rbp-2]
-//         \\    mov rdi, byte0
-//         \\    xor rax, rax
-//         \\    sub rsp, 14
-//         \\    call _printf
-//         \\    add rsp, 14
-//         \\    sub rsp, 4
-//         \\    mov dword [rbp-6], eax
-//         \\    mov edi, dword [rbp-6]
-//         \\    mov rax, 0x02000001
-//         \\    syscall
-//     ;
-//     expectEqualStrings(x86_string.slice(), expected);
-//     x86_string.deinit();
-// }
+test "conditional" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const allocator = &gpa.allocator;
+    const source =
+        \\(fn start :args () :ret i32
+        \\  :body
+        \\  (let conditional 1)
+        \\  (let then i32 5)
+        \\  (let else i32 7)
+        \\  (if conditional then else))
+    ;
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    var ast = try ra.parse(allocator, &entities, source);
+    var ir = try ra.lower(allocator, &entities, ast);
+    ast.deinit();
+    var x86 = try ra.codegen(allocator, &entities, ir);
+    ir.deinit();
+    var x86_string = try ra.x86String(allocator, x86, entities);
+    entities.deinit();
+    x86.deinit();
+    const expected =
+        \\    global _main
+        \\
+        \\    section .text
+        \\
+        \\_main:
+        \\    push rbp
+        \\    mov rbp, rsp
+        \\    mov rax, 1
+        \\    cmp rax, 0
+        \\    je label1
+        \\    mov rax, 5
+        \\    jmp label2
+        \\
+        \\label1:
+        \\    mov rax, 7
+        \\    jmp label2
+        \\
+        \\label2:
+        \\    sub rsp, 4
+        \\    mov dword [rbp-4], eax
+        \\    mov edi, dword [rbp-4]
+        \\    mov rax, 0x02000001
+        \\    syscall
+    ;
+    expectEqualStrings(x86_string.slice(), expected);
+    x86_string.deinit();
+}
