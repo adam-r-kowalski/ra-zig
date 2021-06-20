@@ -358,9 +358,16 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
         switch (expression_kind) {
             .Call => try codegenCall(context, i),
             .Jump => {
-                switch (context.entities.types.get(branch.then_entity).?) {
+                const type_of_then = context.entities.types.get(branch.then_entity).?;
+                switch (type_of_then) {
                     I32 => try moveToRegister(context, .Eax, branch.then_entity),
-                    else => unreachable,
+                    U8 => try moveToRegister(context, .Ah, branch.then_entity),
+                    else => {
+                        switch (context.entities.values.get(type_of_then).?) {
+                            Array => try moveToRegister(context, .Rax, branch.then_entity),
+                            else => unreachable,
+                        }
+                    },
                 }
                 try opLabel(context, .Jmp, phi_x86_block_result.index);
             },
@@ -371,9 +378,16 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
         switch (expression_kind) {
             .Call => try codegenCall(else_context, i),
             .Jump => {
-                switch (else_context.entities.types.get(branch.then_entity).?) {
+                const type_of_else = else_context.entities.types.get(branch.else_entity).?;
+                switch (type_of_else) {
                     I32 => try moveToRegister(else_context, .Eax, branch.else_entity),
-                    else => unreachable,
+                    U8 => try moveToRegister(else_context, .Ah, branch.else_entity),
+                    else => {
+                        switch (context.entities.values.get(type_of_else).?) {
+                            Array => try moveToRegister(else_context, .Rax, branch.else_entity),
+                            else => unreachable,
+                        }
+                    },
                 }
                 try opLabel(else_context, .Jmp, phi_x86_block_result.index);
             },
@@ -397,26 +411,52 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
             .Phi => {
                 const phi_index = phi_context.ir_block.indices.items[i];
                 const phi = phi_context.ir_block.phis.items[phi_context.ir_block.indices.items[phi_index]];
-                const phi_type = phi_context.entities.types.get(phi.then_entity).?;
-                assert(phi_type == phi_context.entities.types.get(phi.else_entity).?);
-                switch (phi_type) {
+                const then_type = phi_context.entities.types.get(phi.then_entity).?;
+                const else_type = phi_context.entities.types.get(phi.else_entity).?;
+                switch (then_type) {
                     Int, I64 => {
+                        assert(then_type == else_type);
                         phi_context.stack.top += 8;
                         const offset = phi_context.stack.top;
                         try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
                         try opRegImmediate(phi_context, .Sub, .Rsp, 8);
                         try opStackReg(phi_context, .Mov, offset, .Rax);
-                        try phi_context.entities.types.putNoClobber(phi.phi_entity, phi_type);
+                        try phi_context.entities.types.putNoClobber(phi.phi_entity, then_type);
                     },
                     I32 => {
+                        assert(then_type == else_type);
                         phi_context.stack.top += 4;
                         const offset = phi_context.stack.top;
                         try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
                         try opRegImmediate(phi_context, .Sub, .Rsp, 4);
                         try opStackReg(phi_context, .Mov, offset, .Eax);
-                        try phi_context.entities.types.putNoClobber(phi.phi_entity, phi_type);
+                        try phi_context.entities.types.putNoClobber(phi.phi_entity, then_type);
                     },
-                    else => unreachable,
+                    U8 => {
+                        assert(then_type == else_type);
+                        phi_context.stack.top += 1;
+                        const offset = phi_context.stack.top;
+                        try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
+                        try opRegImmediate(phi_context, .Sub, .Rsp, 1);
+                        try opStackReg(phi_context, .Mov, offset, .Ah);
+                        try phi_context.entities.types.putNoClobber(phi.phi_entity, then_type);
+                    },
+                    else => {
+                        const then_type_value = context.entities.values.get(then_type).?;
+                        switch (then_type_value) {
+                            Array => {
+                                const else_type_value = context.entities.values.get(else_type).?;
+                                assert(then_type_value == else_type_value);
+                                phi_context.stack.top += 8;
+                                const offset = phi_context.stack.top;
+                                try phi_context.stack.entity.putNoClobber(phi.phi_entity, offset);
+                                try opRegImmediate(phi_context, .Sub, .Rsp, 8);
+                                try opStackReg(phi_context, .Mov, offset, .Rax);
+                                try phi_context.entities.types.putNoClobber(phi.phi_entity, then_type);
+                            },
+                            else => unreachable,
+                        }
+                    },
                 }
             },
             .Return => try onReturn(phi_context, branch.phi_entity),
@@ -1254,6 +1294,7 @@ fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !voi
 
 const qword_registers = [_]Register{ .Rdi, .Rsi, .Rdx, .Rcx, .R8, .R9 };
 const dword_registers = [_]Register{ .Edi, .Esi, .Edx, .Ecx, .R8d, .R9d };
+const byte_registers = [_]Register{ .Dil, .Sil, .Dh, .Ch, .R8b, .R9b };
 const xmm_registers = [_]SseRegister{ .Xmm0, .Xmm1, .Xmm2, .Xmm3, .Xmm4, .Xmm5 };
 
 fn codegenReturn(context: Context, ret: Entity) !void {
@@ -1262,6 +1303,7 @@ fn codegenReturn(context: Context, ret: Entity) !void {
         switch (return_type) {
             I64 => try opRegStack(context, .Mov, .Rax, offset),
             I32 => try opRegStack(context, .Mov, .Eax, offset),
+            U8 => try opRegStack(context, .Mov, .Ah, offset),
             F64 => try opSseRegStack(context, .Movsd, .Xmm0, offset),
             else => unreachable,
         }
@@ -1351,6 +1393,10 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                             assert(argument_type == Int or argument_type == I32);
                             try moveToRegister(context, dword_registers[argument_index], argument_entity);
                         },
+                        U8 => {
+                            assert(argument_type == Int or argument_type == U8);
+                            try moveToRegister(context, byte_registers[argument_index], argument_entity);
+                        },
                         F64 => {
                             assert(argument_type == Int or argument_type == Float or argument_type == F64);
                             try moveToSseRegister(context, xmm_registers[argument_index], argument_entity);
@@ -1416,6 +1462,7 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                     switch (parameter_types[i]) {
                         I64 => try opStackReg(overload_context, .Mov, offset, qword_registers[i]),
                         I32 => try opStackReg(overload_context, .Mov, offset, dword_registers[i]),
+                        U8 => try opStackReg(overload_context, .Mov, offset, byte_registers[i]),
                         F64 => try opStackSseReg(overload_context, .Movsd, offset, xmm_registers[i]),
                         else => unreachable,
                     }
@@ -1428,6 +1475,9 @@ fn codegenCall(context: Context, call_index: usize) error{OutOfMemory}!void {
                             try codegenReturn(overload_context, ret);
                         },
                         .Call => try codegenCall(overload_context, i),
+                        .TypedLet => try codegenTypedLet(overload_context, i),
+                        .CopyingLet => try codegenCopyingLet(overload_context, i),
+                        .CopyingTypedLet => try codegenCopyingTypedLet(overload_context, i),
                         .Branch => try codegenBranch(overload_context, i, codegenReturn),
                         else => unreachable,
                     }
