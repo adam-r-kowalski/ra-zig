@@ -2106,11 +2106,11 @@ test "conditional" {
         \\    mov rax, 1
         \\    cmp rax, 0
         \\    je label1
-        \\    mov rax, 5
+        \\    mov eax, 5
         \\    jmp label2
         \\
         \\label1:
-        \\    mov rax, 7
+        \\    mov eax, 7
         \\    jmp label2
         \\
         \\label2:
@@ -2183,8 +2183,9 @@ test "max" {
         \\
         \\label3:
         \\    sub rsp, 4
-        \\    mov dword [rbp-4], eax
-        \\    mov eax, dword [rbp-4]
+        \\    mov dword [rbp-13], eax
+        \\    mov eax, dword [rbp-13]
+        \\    add rsp, 13
         \\    pop rbp
         \\    ret
     ;

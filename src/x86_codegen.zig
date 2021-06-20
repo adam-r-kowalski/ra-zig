@@ -358,7 +358,10 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
         switch (expression_kind) {
             .Call => try codegenCall(context, i),
             .Jump => {
-                try moveToRegister(context, .Rax, branch.then_entity);
+                switch (context.entities.types.get(branch.then_entity).?) {
+                    I32 => try moveToRegister(context, .Eax, branch.then_entity),
+                    else => unreachable,
+                }
                 try opLabel(context, .Jmp, phi_x86_block_result.index);
             },
             else => unreachable,
@@ -368,7 +371,10 @@ fn codegenBranch(context: Context, branch_index: usize, onReturn: fn (Context, E
         switch (expression_kind) {
             .Call => try codegenCall(else_context, i),
             .Jump => {
-                try moveToRegister(else_context, .Rax, branch.else_entity);
+                switch (else_context.entities.types.get(branch.then_entity).?) {
+                    I32 => try moveToRegister(else_context, .Eax, branch.else_entity),
+                    else => unreachable,
+                }
                 try opLabel(else_context, .Jmp, phi_x86_block_result.index);
             },
             else => unreachable,

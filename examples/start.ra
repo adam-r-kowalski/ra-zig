@@ -5,4 +5,4 @@
   :body (* x x))
 
 (fn start :args () :ret i32
-  :body (print (square (max 7 9))))
+  :body (print (square (max 7 5))))
