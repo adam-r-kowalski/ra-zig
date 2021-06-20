@@ -44,15 +44,31 @@ pub fn main() anyerror!void {
     defer asm_file.close();
     try asm_file.writeAll(x86_string.slice());
     const t9 = timer.read();
-    _ = try std.ChildProcess.exec(.{
-        .allocator = allocator,
-        .argv = &[_][]const u8{ "nasm", "-fmacho64", "temp/code.asm" },
-    });
+    {
+        const result = try std.ChildProcess.exec(.{
+            .allocator = allocator,
+            .argv = &[_][]const u8{ "nasm", "-fmacho64", "temp/code.asm" },
+        });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+        if (result.stderr.len > 0) {
+            std.debug.print("\n{s}\n", .{result.stderr});
+            unreachable;
+        }
+    }
     const t10 = timer.read();
-    _ = try std.ChildProcess.exec(.{
-        .allocator = allocator,
-        .argv = &[_][]const u8{ "ld", "temp/code.o", "-lSystem", "-o", "temp/code" },
-    });
+    {
+        const result = try std.ChildProcess.exec(.{
+            .allocator = allocator,
+            .argv = &[_][]const u8{ "ld", "temp/code.o", "-lSystem", "-o", "temp/code" },
+        });
+        defer allocator.free(result.stdout);
+        defer allocator.free(result.stderr);
+        if (result.stderr.len > 0) {
+            std.debug.print("\n{s}\n", .{result.stderr});
+            unreachable;
+        }
+    }
     const t11 = timer.read();
     // std.debug.print(
     //     \\initialize allocator  {}

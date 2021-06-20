@@ -24,6 +24,7 @@ test "trivial" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -65,6 +66,7 @@ test "binary op between two signed integers" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .text
@@ -115,6 +117,7 @@ test "binary op between three signed integers" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .text
@@ -165,6 +168,7 @@ test "divide two signed integers" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -210,6 +214,7 @@ test "binary op between two signed floats" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .data
@@ -263,6 +268,7 @@ test "binary op between signed float and comptime int" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .data
@@ -316,6 +322,7 @@ test "binary op between comptime int and signed float" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .data
@@ -370,6 +377,7 @@ test "binary op between three signed floats" {
         entities.deinit();
         x86.deinit();
         const expected = try std.fmt.allocPrint(allocator,
+            \\    default rel
             \\    global _main
             \\
             \\    section .data
@@ -422,6 +430,7 @@ test "print a signed integer" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -435,9 +444,9 @@ test "print a signed integer" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 12345
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -471,6 +480,7 @@ test "print three signed integers" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -484,24 +494,24 @@ test "print three signed integers" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 10
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov rsi, 20
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
         \\    sub rsp, 12
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 12
         \\    sub rsp, 4
         \\    mov dword [rbp-8], eax
         \\    mov rsi, 30
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
         \\    sub rsp, 8
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 8
         \\    sub rsp, 4
         \\    mov dword [rbp-12], eax
@@ -527,6 +537,7 @@ test "print a signed float" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -541,9 +552,9 @@ test "print a signed float" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word0]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov rax, 1
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -577,6 +588,7 @@ test "print three signed floats" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -593,24 +605,24 @@ test "print three signed floats" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    movsd xmm0, [rel quad_word0]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov rax, 1
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    movsd xmm0, [rel quad_word1]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov rax, 1
         \\    sub rsp, 12
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 12
         \\    sub rsp, 4
         \\    mov dword [rbp-8], eax
         \\    movsd xmm0, [rel quad_word2]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov rax, 1
         \\    sub rsp, 8
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 8
         \\    sub rsp, 4
         \\    mov dword [rbp-12], eax
@@ -639,6 +651,7 @@ test "print string literal" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -652,10 +665,10 @@ test "print string literal" {
         \\_main:
         \\    push rbp
         \\    mov rbp, rsp
-        \\    mov rsi, byte0
-        \\    mov rdi, byte1
+        \\    lea rsi, [byte0]
+        \\    lea rdi, [byte1]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -683,6 +696,7 @@ test "print char literal" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -696,9 +710,9 @@ test "print char literal" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov sil, 97
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -729,6 +743,7 @@ test "user defined function single int" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -782,6 +797,7 @@ test "user defined function four ints" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -855,6 +871,7 @@ test "two user defined functions taking ints" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -946,6 +963,7 @@ test "call user defined int function twice" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1007,6 +1025,7 @@ test "user defined function single float" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .data
@@ -1067,6 +1086,7 @@ test "user defined function two floats" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .data
@@ -1137,6 +1157,7 @@ test "call user defined function float function twice" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\
         \\    section .data
@@ -1205,6 +1226,7 @@ test "call user defined function with heterogeneous" {
     var x86_string = try ra.x86String(allocator, x86, entities);
     defer x86_string.deinit();
     std.testing.expectEqualStrings(x86_string.slice(),
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1235,17 +1257,17 @@ test "call user defined function with heterogeneous" {
         \\    mov dword [rbp-4], edi
         \\    movsd qword [rbp-12], xmm1
         \\    mov esi, dword [rbp-4]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
         \\    sub rsp, 4
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 4
         \\    sub rsp, 4
         \\    mov dword [rbp-16], eax
         \\    movsd xmm0, qword [rbp-12]
-        \\    mov rdi, byte1
+        \\    lea rdi, [byte1]
         \\    mov rax, 1
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-20], eax
         \\    mov eax, dword [rbp-20]
@@ -1276,6 +1298,7 @@ test "open syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1290,17 +1313,17 @@ test "open syscall" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rax, 0x2000005
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov esi, 0
         \\    xor rdx, rdx
         \\    syscall
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov esi, dword [rbp-4]
-        \\    mov rdi, byte1
+        \\    lea rdi, [byte1]
         \\    xor rax, rax
         \\    sub rsp, 12
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 12
         \\    sub rsp, 4
         \\    mov dword [rbp-8], eax
@@ -1334,6 +1357,7 @@ test "lseek syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1378,6 +1402,7 @@ test "bit-or" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1419,6 +1444,7 @@ test "let with explicit type" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1466,6 +1492,7 @@ test "mmap syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1522,6 +1549,7 @@ test "read syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1562,6 +1590,7 @@ test "close syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1600,6 +1629,7 @@ test "munmap syscall" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1642,6 +1672,7 @@ test "copying let" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1655,9 +1686,9 @@ test "copying let" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rsi, 5
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -1689,6 +1720,7 @@ test "copying typed let" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1702,9 +1734,9 @@ test "copying typed let" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov esi, 5
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-4], eax
         \\    mov edi, dword [rbp-4]
@@ -1737,6 +1769,7 @@ test "pointer decay" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .data
@@ -1749,7 +1782,7 @@ test "pointer decay" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    sub rsp, 8
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov qword [rbp-8], rdi
         \\    sub rsp, 1
         \\    mov rdi, qword [rbp-8]
@@ -1798,6 +1831,7 @@ test "read file contents to buffer" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1812,7 +1846,7 @@ test "read file contents to buffer" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    mov rax, 0x2000005
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov esi, 0
         \\    xor rdx, rdx
         \\    syscall
@@ -1865,10 +1899,10 @@ test "read file contents to buffer" {
         \\    syscall
         \\    sub rsp, 4
         \\    mov dword [rbp-48], eax
-        \\    mov rdi, byte1
+        \\    lea rdi, [byte1]
         \\    mov rsi, qword [rbp-36]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-52], eax
         \\    mov rax, 0x2000049
@@ -1906,6 +1940,7 @@ test "var binding with 1 set" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1943,6 +1978,7 @@ test "var binding with 2 sets" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -1980,6 +2016,7 @@ test "pointer arithmetic" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -1994,16 +2031,16 @@ test "pointer arithmetic" {
         \\    push rbp
         \\    mov rbp, rsp
         \\    sub rsp, 8
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    mov qword [rbp-8], rdi
         \\    mov rax, qword [rbp-8]
         \\    add rax, 1
         \\    sub rsp, 8
         \\    mov qword [rbp-16], rax
-        \\    mov rdi, byte1
+        \\    lea rdi, [byte1]
         \\    mov rsi, qword [rbp-16]
         \\    xor rax, rax
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    sub rsp, 4
         \\    mov dword [rbp-20], eax
         \\    mov edi, dword [rbp-20]
@@ -2037,6 +2074,7 @@ test "equality between two signed integers" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\    extern _printf
         \\
@@ -2059,10 +2097,10 @@ test "equality between two signed integers" {
         \\    sub rsp, 1
         \\    mov byte [rbp-2], al
         \\    mov sil, byte [rbp-2]
-        \\    mov rdi, byte0
+        \\    lea rdi, [byte0]
         \\    xor rax, rax
         \\    sub rsp, 14
-        \\    call _printf
+        \\    call [_printf wrt ..gotpcrel]
         \\    add rsp, 14
         \\    sub rsp, 4
         \\    mov dword [rbp-6], eax
@@ -2096,6 +2134,7 @@ test "conditional" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text
@@ -2145,6 +2184,7 @@ test "max" {
     entities.deinit();
     x86.deinit();
     const expected =
+        \\    default rel
         \\    global _main
         \\
         \\    section .text

@@ -76,10 +76,10 @@ fn registerSize(reg: Register) Size {
     };
 }
 
-fn opLiteral(context: Context, op: Instruction, lit: InternedString) !void {
-    _ = try context.x86_block.instructions.insert(op);
+fn opRelativeCall(context: Context, lit: InternedString) !void {
+    _ = try context.x86_block.instructions.insert(.Call);
     const operand_kinds = try context.allocator.alloc(Kind, 1);
-    operand_kinds[0] = .Literal;
+    operand_kinds[0] = .RelativeLiteral;
     _ = try context.x86_block.operand_kinds.insert(operand_kinds);
     const operands = try context.allocator.alloc(usize, 1);
     operands[0] = lit;
@@ -429,12 +429,12 @@ fn codegenPrintI64(context: Context, call: Call) !void {
     try moveToRegister(context, .Rsi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%ld\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -448,12 +448,12 @@ fn codegenPrintI32(context: Context, call: Call) !void {
     try moveToRegister(context, .Esi, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%d\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -467,12 +467,12 @@ fn codegenPrintU8(context: Context, call: Call) !void {
     try moveToRegister(context, .Sil, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%c\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -486,12 +486,12 @@ fn codegenPrintF64(context: Context, call: Call) !void {
     try moveToSseRegister(context, .Xmm0, call.argument_entities[0]);
     const format_string = try internString(context.entities, "\"%f\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     try opRegImmediate(context, .Mov, .Rax, 1);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -512,13 +512,13 @@ fn codegenPrintArray(context: Context, call: Call, type_of: Entity) !void {
     try insertUniqueId(&context.x86.bytes, null_terminated_string);
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rsi, null_terminated_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rsi, null_terminated_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -534,14 +534,14 @@ fn codegenPrintPtr(context: Context, call: Call, type_of: Entity) !void {
     assert(context.entities.pointers.items[pointer_index] == U8);
     const format_string = try internString(context.entities, "\"%s\", 10, 0");
     try insertUniqueId(&context.x86.bytes, format_string);
-    try opRegByte(context, .Mov, .Rdi, format_string);
+    try opRegByte(context, .Lea, .Rdi, format_string);
     const argument_offset = context.stack.entity.get(argument).?;
     try opRegStack(context, .Mov, .Rsi, argument_offset);
     try opRegReg(context, .Xor, .Rax, .Rax);
     const align_offset = try alignStackTo16Bytes(context);
     const printf = try internString(context.entities, "_printf");
     try context.x86.externs.insert(printf);
-    try opLiteral(context, .Call, printf);
+    try opRelativeCall(context, printf);
     try restoreStack(context, align_offset);
     context.stack.top += 4;
     const result_offset = context.stack.top;
@@ -979,7 +979,7 @@ fn codegenOpen(context: Context, call: Call) !void {
     defer context.allocator.free(buffer);
     const null_terminated_string = try internString(context.entities, buffer);
     try insertUniqueId(&context.x86.bytes, null_terminated_string);
-    try opRegByte(context, .Mov, .Rdi, null_terminated_string);
+    try opRegByte(context, .Lea, .Rdi, null_terminated_string);
     const oflag = call.argument_entities[1];
     assert(context.entities.types.get(oflag).? == I32 or context.entities.types.get(oflag).? == Int);
     try moveToRegister(context, .Esi, oflag);
@@ -1238,7 +1238,7 @@ fn codegenCopyingTypedLet(context: Context, copying_typed_let_index: usize) !voi
                         try context.stack.entity.putNoClobber(copying_typed_let.destination_entity, result_offset);
                         try context.entities.types.putNoClobber(copying_typed_let.destination_entity, copying_typed_let.type_entity);
                         try opRegImmediate(context, .Sub, .Rsp, 8);
-                        try opRegByte(context, .Mov, .Rdi, null_terminated_string);
+                        try opRegByte(context, .Lea, .Rdi, null_terminated_string);
                         try opStackReg(context, .Mov, result_offset, .Rdi);
                     },
                     else => unreachable,
@@ -1562,6 +1562,7 @@ fn writeLabel(output: *List(u8), label: Label) !void {
 
 fn writeInstruction(output: *List(u8), instruction: Instruction) !void {
     switch (instruction) {
+        .Lea => try output.insertSlice("lea"),
         .Mov => try output.insertSlice("mov"),
         .Movsd => try output.insertSlice("movsd"),
         .Push => try output.insertSlice("push"),
@@ -1685,7 +1686,11 @@ fn uniqueIdString(output: *List(u8), prefix: []const u8, suffix: []const u8, ids
 pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) {
     var output = List(u8).init(allocator);
     errdefer output.deinit();
-    try output.insertSlice("    global _main\n");
+    try output.insertSlice(
+        \\    default rel
+        \\    global _main
+        \\
+    );
     var extern_iterator = x86.externs.iterator();
     while (extern_iterator.next()) |entry| {
         try output.insertSlice("    extern ");
@@ -1721,7 +1726,8 @@ pub fn x86String(allocator: *Allocator, x86: X86, entities: Entities) !List(u8) 
                     .SseRegister => try writeSseRegister(&output, @intToEnum(SseRegister, operands[k])),
                     .Label => try writeLabel(&output, operands[k]),
                     .Literal => try output.insertSlice(entities.interned_strings.data.items[operands[k]]),
-                    .Byte => try output.insertFormatted("byte{}", .{x86.bytes.string_to_index.get(operands[k]).?}),
+                    .RelativeLiteral => try output.insertFormatted("[{s} wrt ..gotpcrel]", .{entities.interned_strings.data.items[operands[k]]}),
+                    .Byte => try output.insertFormatted("[byte{}]", .{x86.bytes.string_to_index.get(operands[k]).?}),
                     .QuadWord => try output.insertFormatted("quad_word{}", .{x86.quad_words.string_to_index.get(operands[k]).?}),
                     .RelativeQword => try output.insertFormatted("[rel quad_word{}]", .{x86.quad_words.string_to_index.get(operands[k]).?}),
                     .StackOffsetQword => try output.insertFormatted("qword [rbp-{}]", .{operands[k]}),

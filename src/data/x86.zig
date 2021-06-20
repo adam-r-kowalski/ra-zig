@@ -85,6 +85,7 @@ pub const SseRegister = enum(usize) {
 };
 
 pub const Instruction = enum(u8) {
+    Lea,
     Mov,
     Movsd,
     Push,
@@ -118,6 +119,7 @@ pub const Kind = enum(u8) {
     SseRegister,
     Label,
     Literal,
+    RelativeLiteral,
     Byte,
     QuadWord,
     RelativeQword,
