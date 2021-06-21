@@ -150,6 +150,30 @@ fn lowerIf(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_b
     return phi_entity;
 }
 
+fn lowerWhen(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children) !Entity {
+    const allocator = &ir.arena.allocator;
+    const condition_block = &overload.blocks.items[active_block.*];
+    const condition_entity = try lowerExpression(ir, entities, overload, ast, active_block, children[0]);
+
+    const when_block_index = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
+    active_block.* = when_block_index;
+    for (children[1..]) |child|
+        _ = try lowerExpression(ir, entities, overload, ast, active_block, child);
+
+    const final_block_index = try newBlockAndScope(allocator, overload, condition_block.active_scopes);
+    const final_block = &overload.blocks.items[final_block_index];
+
+    active_block.* = final_block_index;
+
+    const when_block = &overload.blocks.items[when_block_index];
+    _ = try when_block.kinds.insert(.Jump);
+    const when_jump_index = try when_block.jumps.insert(final_block_index);
+    _ = try when_block.indices.insert(when_jump_index);
+
+    // TODO(Adam): this should return an entity of type unit
+    return condition_entity;
+}
+
 fn lowerLet(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, active_block: *usize, children: Children, mutable: bool) !Entity {
     const name = astIndex(ast, .Symbol, children[0]);
     const block = &overload.blocks.items[active_block.*];
@@ -256,6 +280,7 @@ fn lowerParens(ir: *Ir, entities: *Entities, overload: *Overload, ast: Ast, acti
     const function = try lowerExpression(ir, entities, overload, ast, active_block, children[0]);
     return switch (function) {
         @enumToInt(Builtins.If) => lowerIf(ir, entities, overload, ast, active_block, children[1..]),
+        @enumToInt(Builtins.When) => lowerWhen(ir, entities, overload, ast, active_block, children[1..]),
         @enumToInt(Builtins.Let) => lowerLet(ir, entities, overload, ast, active_block, children[1..], false),
         @enumToInt(Builtins.Var) => lowerLet(ir, entities, overload, ast, active_block, children[1..], true),
         @enumToInt(Builtins.Set_bang_) => lowerSet(ir, entities, overload, ast, active_block, children[1..]),

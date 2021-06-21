@@ -689,3 +689,68 @@ test "var binding with 2 sets" {
         \\    (return %t1)))
     );
 }
+
+test "when" {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.testing.expect(!gpa.deinit());
+    const source =
+        \\(fn start :args () :ret i32
+        \\  :body
+        \\  (var a 10)
+        \\  (let b u8 1)
+        \\  (when b
+        \\    (let c 25)
+        \\    (set! a (+ a c)))
+        \\  (print a))
+    ;
+    var entities = try ra.data.Entities.init(&gpa.allocator);
+    defer entities.deinit();
+    var ast = try ra.parse(&gpa.allocator, &entities, source);
+    defer ast.deinit();
+    var ir = try ra.lower(&gpa.allocator, &entities, ast);
+    defer ir.deinit();
+    var ir_string = try ra.irString(&gpa.allocator, entities, ir);
+    defer ir_string.deinit();
+    std.testing.expectEqualStrings(ir_string.slice(),
+        \\(fn start
+        \\  :parameter-names ()
+        \\  :parameter-type-blocks ()
+        \\  :return-type-blocks %b0
+        \\  :body-block %b1
+        \\  :scopes
+        \\  (scope %external)
+        \\  (scope %function)
+        \\  (scope %s0)
+        \\  (scope %s1
+        \\    (entity :name a :value 10)
+        \\    (entity :name b :value 1))
+        \\  (scope %s2
+        \\    (entity :name %t0 :value unit))
+        \\  (scope %s3
+        \\    (entity :name c :value 25)
+        \\    (entity :name %t1)
+        \\    (entity :name %t2 :value unit))
+        \\  (scope %s4
+        \\    (entity :name %t1))
+        \\  :blocks
+        \\  (block %b0 :scopes (%external %function %s0)
+        \\    :expressions
+        \\    (return i32))
+        \\  (block %b1 :scopes (%external %function %s1)
+        \\    :expressions
+        \\    (branch b %b2 %b3))
+        \\  (block %b2 :scopes (%external %function %s2)
+        \\    :expressions
+        \\    (jump %b4))
+        \\  (block %b3 :scopes (%external %function %s3)
+        \\    :expressions
+        \\    (let %t2 (+ a c))
+        \\    (jump %b4))
+        \\  (block %b3 :scopes (%external %function %s3)
+        \\    :expressions
+        \\    (let %t3 (phi (%b2 %t0) (%b3 %t1)))
+        \\    (let %t4 (phi (%b2 a) (%b3 %t2)))
+        \\    (let %t5 (print %t4))
+        \\    (return %t5)))
+    );
+}

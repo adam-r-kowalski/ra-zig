@@ -28,6 +28,7 @@ pub const Builtins = enum(Entity) {
     Special_Form,
     Fn,
     If,
+    When,
     Let,
     Var,
     Set_bang_,

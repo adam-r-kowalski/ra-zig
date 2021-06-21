@@ -20,4 +20,5 @@
   (close fd)
   (let target 'P')
   (print-bool (= target (deref buffer)))
+  (print buffer)
   (munmap buffer len))
