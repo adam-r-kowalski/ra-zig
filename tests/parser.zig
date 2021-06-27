@@ -17,9 +17,9 @@ test "int" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(int 123)
-        \\(int 475)
-        \\(int -923)
+        \\(Int 123)
+        \\(Int 475)
+        \\(Int -923)
     );
 }
 
@@ -34,9 +34,9 @@ test "float" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(float 12.3)
-        \\(float 4.75)
-        \\(float .923)
+        \\(Float 12.3)
+        \\(Float 4.75)
+        \\(Float .923)
     );
 }
 
@@ -51,10 +51,10 @@ test "symbol" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(symbol foo)
-        \\(symbol bar)
-        \\(symbol baz)
-        \\(symbol -)
+        \\(Symbol foo)
+        \\(Symbol bar)
+        \\(Symbol baz)
+        \\(Symbol -)
     );
 }
 
@@ -69,9 +69,9 @@ test "keyword" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(keyword :foo)
-        \\(keyword :bar)
-        \\(keyword :baz)
+        \\(Keyword :foo)
+        \\(Keyword :bar)
+        \\(Keyword :baz)
     );
 }
 
@@ -88,9 +88,9 @@ test "character literal" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(char 'a')
-        \\(char 'b')
-        \\(char 'c')
+        \\(Char 'a')
+        \\(Char 'b')
+        \\(Char 'c')
     );
 }
 
@@ -107,9 +107,9 @@ test "string" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(string "foo")
-        \\(string "bar")
-        \\(string "baz")
+        \\(String "foo")
+        \\(String "bar")
+        \\(String "baz")
     );
 }
 
@@ -124,14 +124,14 @@ test "parens" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(parens
-        \\  (symbol +)
-        \\  (int 3)
-        \\  (int 7)
-        \\  (parens
-        \\    (symbol *)
-        \\    (int 9)
-        \\    (int 5)))
+        \\(Parens
+        \\  (Symbol +)
+        \\  (Int 3)
+        \\  (Int 7)
+        \\  (Parens
+        \\    (Symbol *)
+        \\    (Int 9)
+        \\    (Int 5)))
     );
 }
 
@@ -146,20 +146,24 @@ test "brackets" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(brackets
-        \\  (brackets
-        \\    (int 1)
-        \\    (int 2))
-        \\  (brackets
-        \\    (int 3)
-        \\    (int 4)))
+        \\(Brackets
+        \\  (Brackets
+        \\    (Int 1)
+        \\    (Int 2))
+        \\  (Brackets
+        \\    (Int 3)
+        \\    (Int 4)))
     );
 }
 
 test "entry point" {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer expect(!gpa.deinit());
-    const source = "(fn start :args () :ret i32 :body 0)";
+    const source =
+        \\(let start
+        \\  (Fn [] I32)
+        \\  (fn [] 0))
+    ;
     var entities = try ra.data.Entities.init(&gpa.allocator);
     defer entities.deinit();
     var ast = try parse(&gpa.allocator, &entities, source);
@@ -167,14 +171,16 @@ test "entry point" {
     var ast_string = try astString(&gpa.allocator, ast, entities);
     defer ast_string.deinit();
     expectEqualStrings(ast_string.slice(),
-        \\(parens
-        \\  (symbol fn)
-        \\  (symbol start)
-        \\  (keyword :args)
-        \\  (parens)
-        \\  (keyword :ret)
-        \\  (symbol i32)
-        \\  (keyword :body)
-        \\  (int 0))
+        \\(Parens
+        \\  (Symbol let)
+        \\  (Symbol start)
+        \\  (Parens
+        \\    (Symbol Fn)
+        \\    (Brackets)
+        \\    (Symbol I32))
+        \\  (Parens
+        \\    (Symbol fn)
+        \\    (Brackets)
+        \\    (Int 0)))
     );
 }

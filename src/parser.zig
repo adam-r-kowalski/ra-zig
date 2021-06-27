@@ -154,14 +154,14 @@ fn expressionString(output: *List(u8), ast: Ast, entities: Entities, index: usiz
     while (i < depth) : (i += 1) _ = try output.insert(' ');
     const data_index = ast.indices.items[index];
     switch (ast.kinds.items[index]) {
-        .Int => try writeLiteral(output, entities, "int", data_index),
-        .Float => try writeLiteral(output, entities, "float", data_index),
-        .Symbol => try writeLiteral(output, entities, "symbol", data_index),
-        .Keyword => try writeLiteral(output, entities, "keyword", data_index),
-        .String => try writeLiteral(output, entities, "string", data_index),
-        .Char => try writeLiteral(output, entities, "char", data_index),
-        .Parens => try writeList(output, ast, entities, "parens", data_index, depth),
-        .Brackets => try writeList(output, ast, entities, "brackets", data_index, depth),
+        .Int => try writeLiteral(output, entities, "Int", data_index),
+        .Float => try writeLiteral(output, entities, "Float", data_index),
+        .Symbol => try writeLiteral(output, entities, "Symbol", data_index),
+        .Keyword => try writeLiteral(output, entities, "Keyword", data_index),
+        .String => try writeLiteral(output, entities, "String", data_index),
+        .Char => try writeLiteral(output, entities, "Char", data_index),
+        .Parens => try writeList(output, ast, entities, "Parens", data_index, depth),
+        .Brackets => try writeList(output, ast, entities, "Brackets", data_index, depth),
     }
 }
 
