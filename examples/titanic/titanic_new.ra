@@ -1,0 +1,51 @@
+(let readtill
+  (Fn [(Ptr U8) U8 U64] (Ptr U8))
+  (fn [buffer target times]
+    (let current (deref buffer))
+    (let buffer (add buffer 1))
+    (let found (eql current target))
+    (let times (sub times found))
+    (if (and found (eql 0 times))
+      buffer
+      (readtill buffer target times))))
+
+(let Blk Type {:ptr (Ptr U8) :len U64})
+
+(let readfile
+  (Fn [(Ptr U8)] Blk)
+  (fn [filename]
+    (let fd (open filename o-rdonly))
+    (let len (lseek fd 0 seek-end))
+    (let _ (lseek fd 0 seek-set))
+    (let prot (bit-or prot-read prot-write))
+    (let flags (bit-or map-private map-anonymous))
+    (let data (mmap null len prot flags -1 0))
+    (let _ (read fd data len))
+    (let _ (close fd))
+    {:ptr data :len len}))
+
+(let classify-impl
+  (Fn [(Ptr U8) U8 F64] F32)
+  (fn [buffer correct total]
+    (let total (add total 1))
+    (let buffer (readtill buffer ',' 1))
+    (let alive (eql (deref buffer) '1'))
+    (let buffer (readtill buffer ',' 4))
+    (let male (eql (deref buffer) 'm'))
+    (let buffer (readtill buffer '\n' 1))
+    (let correct (add correct (or (and male (not alive)) (and (not male) alive))))
+    (if (eql (deref buffer) '\0')
+      (div correct total)
+      (classify-impl buffer correct total))))
+
+(let classify
+  (Fn [(Ptr U8)] F32)
+  (fn [buffer] (classify-impl buffer 0 0.0)))
+
+(let start
+  (Fn [] I64)
+  (fn []
+    (let contents (readfile "train.csv"))
+    (let accuracy (classify (:ptr contents)))
+    (let _ (printf "accuracy %f\n" accuracy))
+    (munmap (:ptr contents) (:len contents))))
